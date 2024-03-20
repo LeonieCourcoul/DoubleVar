@@ -118,8 +118,9 @@ DoubleVar_IDM <- function(formFixed, formRandom, formGroup, formGroupVisit, form
   message("Survival initialisation")
   data.id <- data.long[!duplicated(id),]
   data.id <- as.data.frame(data.id)
-  data.id$Time_R[which(data.id$Time_R == 0)] <- 0.000000001
-  data.id$Time_L[which(data.id$Time_L == 0)] <- 0.000000001
+  data.id$Time_R[which(data.id$Time_R == 0)] <- 0.00000000000000001
+  data.id$Time_L[which(data.id$Time_L == 0)] <- 0.00000000000000001
+  data.id$Time_T[which(data.id$Time_T == 0)] <- 0.00000000000000001
   if(length(all.vars(formSurv_01))==0){
     Surv_01 <- Surv(Time_R, delta1) ~ 1
   }

@@ -75,7 +75,8 @@ log_llh_2var_IC_rcpp <- function(param,hazard_baseline_01, sharedtype_01,
   Bs_L_R_i_01 <- as.matrix(1); Bs_L_R_i_02 <- as.matrix(1); Bs_L_R_i_12<- as.matrix(1);
   Bs_L_T_i_01 <- as.matrix(1); Bs_L_T_i_02 <- as.matrix(1); Bs_L_T_i_12<- as.matrix(1);
   Bs_T0_i_01 <- as.matrix(1); Bs_T0_i_02 <- as.matrix(1); Bs_T0_i_12 <- as.matrix(1); Time_T0_i <- 0;
-  st_T_i <- c(0); st_0_LR_i <- as.matrix(1); st_L_R_i <- c(0); st_T0_i <- c(0); st_0_LT_i <- as.matrix(1); st_L_T_i <- c(0);
+  st_T_i <- c(0); st_L_i <- c(0); st_0_LR_i <- as.matrix(1); st_L_R_i <- c(0); st_T0_i <- c(0); st_0_LT_i <- as.matrix(1); st_L_T_i <- c(0);
+  B_L_i_01 <- c(0);
   #Manage parameter
   curseur <- 1
   ## Risque 01
@@ -273,7 +274,7 @@ log_llh_2var_IC_rcpp <- function(param,hazard_baseline_01, sharedtype_01,
     sigma_intra <- exp(mu.intra + b_intra)
     var.intra <- sigma_intra**2
   }
-  ll_glob <- 0
+  ll_glob <- rep(NA, nbCase1 + nbCase1bis + nbCase2 + nbCase3)
 
   # Creations entrees rcpp
   sharedtype <- c("current value" %in% sharedtype_01, "slope" %in% sharedtype_01, "inter visit variability" %in% sharedtype_01, "intra visit variability" %in% sharedtype_01,
@@ -290,7 +291,6 @@ log_llh_2var_IC_rcpp <- function(param,hazard_baseline_01, sharedtype_01,
 
   ### Case 1
   if(nbCase1 != 0){
-    print("Case1 go")
     delta2 <- Case1[["delta2"]]; Z_12 <- Case1[["Z_12"]]; Time_T <- Case1[["Time_T"]]; st_T <- Case1[["st_T"]]
     X_GK_T <- Case1[["X_GK_T"]]; U_GK_T <- Case1[["U_GK_T"]]
     Xslope_GK_T <- Case1[["Xslope_GK_T"]];Uslope_GK_T <- Case1[["Uslope_GK_T"]]
@@ -469,13 +469,12 @@ log_llh_2var_IC_rcpp <- function(param,hazard_baseline_01, sharedtype_01,
       if(left_trunc){
         log_dens <- log_dens - log_ind_surv$den
       }
-      ll_glob <- ll_glob + log_dens
+      ll_glob[i] <- log_dens
     }
-    print("end Case 1")
   }
 
   if(nbCase1bis != 0){
-    print("Case1bis go")
+    #print("Case1bis go")
     delta2 <- Case1bis[["delta2"]]; Z_12 <- Case1bis[["Z_12"]]; Z_01 <- Case1bis[["Z_01"]]; Z_02 <- Case1bis[["Z_02"]]
     Time_T <- Case1bis[["Time_T"]];Time_L <- Case1bis[["Time_L"]]
     st_T <- Case1bis[["st_T"]];st_L <- Case1bis[["st_L"]]
@@ -552,7 +551,7 @@ log_llh_2var_IC_rcpp <- function(param,hazard_baseline_01, sharedtype_01,
 
       log_ind_surv <- log_IC_2var_Case1bis(sharedtype,  HB,  Gompertz,  Weibull,
                                            nb_points_integral, alpha_inter_intra,
-                                           alpha_y_slope, alpha_z, gamma, beta, beta_slope,
+                                           alpha_y_slope, alpha_z, gamma_z0, beta, beta_slope,
                                            b_y, b_y_slope, wk, sigma_inter, sigma_intra,
                                            delta2_i, Z_01_i,  Z_02_i,  Z_12_i,  X_T_i, U_T_i,
                                            Xslope_T_i,Uslope_T_i, X_GK_T_i,  U_GK_T_i,  Xslope_GK_T_i,
@@ -567,7 +566,6 @@ log_llh_2var_IC_rcpp <- function(param,hazard_baseline_01, sharedtype_01,
                                            Bs_L_i_01, Bs_L_i_02, Bs_L_i_12,
                                            Bs_T0_i_01, Bs_T0_i_02, Bs_T0_i_12, left_trunc
       )
-
       ## Longitudinal part
       X_base_i <- X_base[offset[i]:(offset[i+1]-1),]
       X_base_i <- matrix(X_base_i, nrow = offset[i+1]-offset[i])
@@ -645,11 +643,11 @@ log_llh_2var_IC_rcpp <- function(param,hazard_baseline_01, sharedtype_01,
       if(left_trunc){
         log_dens <- log_dens - log_ind_surv$den
       }
+      ll_glob[i+nbCase1] <- log_dens
     }
   }
-
   if(nbCase2 != 0){
-    print("Case2 go")
+    #print("Case2 go")
     delta2 <- Case2[["delta2"]]; Z_01 <- Case2[["Z_01"]]; Z_02 <- Case2[["Z_02"]]
     Time_T <- Case2[["Time_T"]]; st_T <- Case2[["st_T"]];
     X_GK_T <- Case2[["X_GK_T"]];U_GK_T <- Case2[["U_GK_T"]]
@@ -710,16 +708,16 @@ log_llh_2var_IC_rcpp <- function(param,hazard_baseline_01, sharedtype_01,
       delta2_i <- delta2[i]
       log_ind_surv <- log_IC_2var_Case2(sharedtype, HB, Gompertz, Weibull,
                                         nb_points_integral, alpha_inter_intra,
-                                        alpha_y_slope, alpha_z, gamma,  beta,  beta_slope,
+                                        alpha_y_slope, alpha_z, gamma_z0,  beta,  beta_slope,
                                         b_y,  b_y_slope,  wk,  sigma_inter,  sigma_intra,
                                         delta2_i, Z_01_i, Z_02_i, X_T_i,  U_T_i,
                                         Xslope_T_i,  Uslope_T_i,  X_GK_T_i,  U_GK_T_i,  Xslope_GK_T_i,
-                                         Uslope_GK_T_i,
-                                         X_GK_T0_i,  U_GK_T0_i,  Xslope_GK_T0_i,  Uslope_GK_T0_i,
-                                         Time_T_i,   Time_T0_i, st_T_i,   st_T0_i,
-                                         B_T_i_02,
-                                         Bs_T_i_01,  Bs_T_i_02,
-                                         Bs_T0_i_01,  Bs_T0_i_02,  left_trunc
+                                        Uslope_GK_T_i,
+                                        X_GK_T0_i,  U_GK_T0_i,  Xslope_GK_T0_i,  Uslope_GK_T0_i,
+                                        Time_T_i,   Time_T0_i, st_T_i,   st_T0_i,
+                                        B_T_i_02,
+                                        Bs_T_i_01,  Bs_T_i_02,
+                                        Bs_T0_i_01,  Bs_T0_i_02,  left_trunc
       )
       ## Longitudinal part
       X_base_i <- X_base[offset[i]:(offset[i+1]-1),]
@@ -798,13 +796,14 @@ log_llh_2var_IC_rcpp <- function(param,hazard_baseline_01, sharedtype_01,
       if(left_trunc){
         log_dens <- log_dens - log_ind_surv$den
       }
-      ll_glob <- ll_glob + log_dens
+
+      ll_glob[i+nbCase1+nbCase1bis] <- log_dens
 
     }
   }
 
   if(nbCase3 != 0){
-    print("Case3 go")
+    #print("Case3 go")
     delta2 <- Case3[["delta2"]]; Z_01 <- Case3[["Z_01"]]; Z_02 <- Case3[["Z_02"]]; Z_12 <- Case3[["Z_12"]]
     Time_T <- Case3[["Time_T"]]; st_T <- Case3[["st_T"]]; Time_L <- Case3[["Time_L"]]
     X_GK_T <- Case3[["X_GK_T"]];U_GK_T <- Case3[["U_GK_T"]]
@@ -828,7 +827,6 @@ log_llh_2var_IC_rcpp <- function(param,hazard_baseline_01, sharedtype_01,
     st_0_LT <- Case3[["st_0_LT"]]; X_0_LT <- Case3[["X_0_LT"]]; U_0_LT <- Case3[["U_0_LT"]];
     Xslope_0_LT <- Case3[["Xslope_0_LT"]]; Uslope_0_LT <- Case3[["Uslope_0_LT"]];
     Bs_0_LT_01 <- Case3[["Bs_0_LT_01"]]; Bs_0_LT_02 <- Case3[["Bs_0_LT_02"]]; Bs_0_LT_12 <- Case3[["Bs_0_LT_12"]];
-
     for(i in 1:nbCase3){
       if("current value" %in% sharedtype_01 || "current value" %in% sharedtype_02 || "current value" %in% sharedtype_12){
         X_T_i <- X_T[i,];U_T_i <- U_T[i,]
@@ -894,9 +892,9 @@ log_llh_2var_IC_rcpp <- function(param,hazard_baseline_01, sharedtype_01,
 
       log_ind_surv <- log_IC_2var_Case3( sharedtype,  HB,  Gompertz,  Weibull,
                                          nb_points_integral,  alpha_inter_intra,
-                                         alpha_y_slope,  alpha_z,  gamma,  beta,  beta_slope,
+                                         alpha_y_slope,  alpha_z,  gamma_z0,  beta,  beta_slope,
                                          b_y,  b_y_slope,  wk,  rep_wk,  sigma_inter,  sigma_intra,
-                                        delta2_i,  Z_01_i,  Z_02_i,  Z_12_i,  X_T_i,  U_T_i,
+                                         delta2_i,  Z_01_i,  Z_02_i,  Z_12_i,  X_T_i,  U_T_i,
                                          Xslope_T_i,  Uslope_T_i,  X_GK_T_i,  U_GK_T_i,  Xslope_GK_T_i,
                                          Uslope_GK_T_i,  X_GK_L_T_i,  U_GK_L_T_i,  Xslope_GK_L_T_i,  Uslope_GK_L_T_i,
                                          X_GK_0_LT_i,  U_GK_0_LT_i,  Xslope_GK_0_LT_i,  Uslope_GK_0_LT_i,
@@ -907,9 +905,8 @@ log_llh_2var_IC_rcpp <- function(param,hazard_baseline_01, sharedtype_01,
                                          Bs_T_i_01,  Bs_T_i_02,  Bs_T_i_12,
                                          Bs_0_LT_i_01,  Bs_0_LT_i_02,  Bs_0_LT_i_12,
                                          Bs_L_T_i_01,   Bs_L_T_i_02,  Bs_L_T_i_12,
-                                         Bs_T0_i_01,  Bs_T0_i_02, left_trunc
-      )
-
+                                         Bs_T0_i_01,  Bs_T0_i_02, left_trunc)
+#
       ## Longitudinal part
       X_base_i <- X_base[offset[i]:(offset[i+1]-1),]
       X_base_i <- matrix(X_base_i, nrow = offset[i+1]-offset[i])
@@ -987,17 +984,20 @@ log_llh_2var_IC_rcpp <- function(param,hazard_baseline_01, sharedtype_01,
       if(left_trunc){
         log_dens <- log_dens - log_ind_surv$den
       }
-      ll_glob <- ll_glob + log_dens
+      ll_glob[i+nbCase1+nbCase1bis+nbCase2] <- log_dens
 
 
     }
   }
 
-  if(is.na(ll_glob)){
+  ll_glob2 <- sum(ll_glob)
+
+
+  if(is.na(ll_glob2)){
     print(param)
-    ll_glob <- -1E09
+    ll_glob2 <- -1E09
   }
-  print(ll_glob)
-  ll_glob
+  print(ll_glob2)
+  ll_glob2
 
 }

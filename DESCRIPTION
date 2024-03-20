@@ -15,3 +15,5 @@ LinkingTo:
     RcppArmadillo
 Imports: 
     Rcpp
+URL: https://github.com/LeonieCourcoul/DoubleVar
+BugReports: https://github.com/LeonieCourcoul/DoubleVar/issues

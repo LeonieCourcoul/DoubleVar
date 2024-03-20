@@ -13,7 +13,7 @@ using namespace std;
 
 List log_IC_2var_Case3(arma::vec sharedtype, List HB, arma::vec Gompertz, arma::vec Weibull,
                        arma::vec nb_points_integral, arma::vec alpha_inter_intra,
-                       arma::vec alpha_y_slope, List alpha_z, List gamma, arma::vec beta, arma::vec beta_slope,
+                       arma::vec alpha_y_slope, List alpha_z, List gamma_B, arma::vec beta, arma::vec beta_slope,
                        arma::mat b_y, arma::mat b_y_slope, arma::vec wk, arma::vec rep_wk, arma::vec sigma_inter, arma::vec sigma_intra,
                        int delta2_i, arma::rowvec Z_01_i, arma::rowvec Z_02_i, arma::rowvec Z_12_i, arma::rowvec X_T_i, arma::vec U_T_i,
                        arma::rowvec Xslope_T_i, arma::vec Uslope_T_i, arma::mat X_GK_T_i, arma::mat U_GK_T_i, arma::mat Xslope_GK_T_i,
@@ -71,9 +71,11 @@ List log_IC_2var_Case3(arma::vec sharedtype, List HB, arma::vec Gompertz, arma::
   arma::vec alpha_z_01 = alpha_z[0];
   arma::vec alpha_z_02 = alpha_z[1];
   arma::vec alpha_z_12 = alpha_z[2];
-  arma::vec gamma_01 = gamma[0];
-  arma::vec gamma_02 = gamma[1];
-  arma::vec gamma_12 = gamma[2];
+  //Rcout << "The value of v : \n" << 3 << "\n";
+  arma::vec gamma_01 = gamma_B[0];
+  arma::vec gamma_02 = gamma_B[1];
+  arma::vec gamma_12 = gamma_B[2];
+
 
   // Survival part
   ///// h
@@ -213,7 +215,6 @@ List log_IC_2var_Case3(arma::vec sharedtype, List HB, arma::vec Gompertz, arma::
       h_12_T_i = h_12_T_i%exp(alpha_slope_12*slope_T);
     }
   }
-
   ///// h0
   ///////// 1-2
   double h_0_12_T_i;
@@ -308,16 +309,15 @@ List log_IC_2var_Case3(arma::vec sharedtype, List HB, arma::vec Gompertz, arma::
   else{
     predsurv_01 = arma::dot(alpha_z_01, Z_01_i);
   }
-
   etaBaseline_01_L_T_i = exp(etaBaseline_01_L_T_i + predsurv_01);
   survLong_01_L_T_i = exp(survLong_01_L_T_i)%arma::repelem(h_0_GK_01_L_T_i.t(),S,1);
   arma::mat A_01_L_T_i;
   A_01_L_T_i = arma::repelem(etaBaseline_01_L_T_i,1,nb_pointsGK)%survLong_01_L_T_i*(Time_L_T_i/2);
 
   etaBaseline_01_T_i = exp(etaBaseline_01_T_i + predsurv_01);
-  survLong_01_T_i = exp(survLong_01_T_i)%arma::repelem(h_0_GK_01_T_i.t(),S,1);
+  survLong_01_T_i = exp(survLong_01_T_i)*h_0_GK_01_T_i;
   arma::mat A_01_T_i;
-  A_01_T_i = arma::repelem(etaBaseline_01_T_i,1,nb_pointsGK)%survLong_01_T_i*(Time_T_i/2);
+  A_01_T_i = etaBaseline_01_T_i%survLong_01_T_i*(Time_T_i/2);
 
   etaBaseline_01_0_LT_i = exp(etaBaseline_01_0_LT_i + predsurv_01);
   survLong_01_0_LT_i = exp(survLong_01_0_LT_i);
@@ -381,9 +381,9 @@ List log_IC_2var_Case3(arma::vec sharedtype, List HB, arma::vec Gompertz, arma::
 
 
   etaBaseline_02_T_i = exp(etaBaseline_02_T_i + predsurv_02);
-  survLong_02_T_i = exp(survLong_02_T_i)%arma::repelem(h_0_GK_02_T_i.t(),S,1);
+  survLong_02_T_i = exp(survLong_02_T_i)*h_0_GK_02_T_i;
   arma::mat A_02_T_i;
-  A_02_T_i = arma::repelem(etaBaseline_02_T_i,1,nb_pointsGK)%survLong_02_T_i*(Time_T_i/2);
+  A_02_T_i = etaBaseline_02_T_i%survLong_02_T_i*(Time_T_i/2);
 
   etaBaseline_02_0_LT_i = exp(etaBaseline_02_0_LT_i + predsurv_02);
   survLong_02_0_LT_i = exp(survLong_02_0_LT_i);
@@ -407,11 +407,9 @@ List log_IC_2var_Case3(arma::vec sharedtype, List HB, arma::vec Gompertz, arma::
   }
   A_0_LT_red = A_0_LT_red%arma::repelem(ck.t(),S,1);
   arma::mat A_12_T_i_rep = arma::repelem(A_12_T_i,1,nb_pointsGK);
+  arma::vec SurvTotCase3 = log(exp(-A_01_T_i - A_02_T_i)%(pow(h_02_T_i,delta2_i))+(pow(h_12_T_i,delta2_i))%sum(A_01_L_T_i%exp(A_0_LT_red-A_12_T_i_rep),1));
 
-  arma::vec SurvTotCase3 = log(exp(-A_01_T_i - A_02_T_i)*(pow(h_02_T_i,delta2_i))+(pow(h_12_T_i,delta2_i))%sum(A_01_L_T_i%exp(A_0_LT_red-A_12_T_i_rep),1));
-
-
-  double den;
+  double den = 0;
   if(left_trunc){
     den = log(sum(exp(-A_01_T0_i - A_02_T0_i)))-log(S);
   }
@@ -421,6 +419,7 @@ List log_IC_2var_Case3(arma::vec sharedtype, List HB, arma::vec Gompertz, arma::
 
   List ret;
   ret["SurvTotCase3"] = SurvTotCase3;
+
   ret["den"] = den;
   return ret;
 

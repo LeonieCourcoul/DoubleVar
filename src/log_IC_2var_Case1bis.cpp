@@ -119,9 +119,6 @@ List log_IC_2var_Case1bis(arma::vec sharedtype, List HB, arma::vec Gompertz, arm
     h_12_T_i = h_12_T_i%exp(alpha_inter_12*sigma_inter);
     etaBaseline_12_L_i = etaBaseline_12_L_i + alpha_inter_12*sigma_inter;
     etaBaseline_12_T_i = etaBaseline_12_T_i + alpha_inter_12*sigma_inter;
-    if(left_trunc){
-      etaBaseline_01_T0_i = etaBaseline_01_T0_i + alpha_inter_01*sigma_inter;
-    }
   }
 
   if(dep_var_intra_01){
@@ -141,9 +138,6 @@ List log_IC_2var_Case1bis(arma::vec sharedtype, List HB, arma::vec Gompertz, arm
     h_12_T_i = h_12_T_i%exp(alpha_intra_12*sigma_intra);
     etaBaseline_12_L_i = etaBaseline_12_L_i + alpha_intra_12*sigma_intra;
     etaBaseline_12_T_i = etaBaseline_12_T_i + alpha_intra_12*sigma_intra;
-    if(left_trunc){
-      etaBaseline_01_T0_i = etaBaseline_01_T0_i + alpha_intra_01*sigma_intra;
-    }
   }
 
   if(dep_cv_01 || dep_cv_02 || dep_cv_12){
@@ -349,7 +343,7 @@ List log_IC_2var_Case1bis(arma::vec sharedtype, List HB, arma::vec Gompertz, arm
 
   arma::vec SurvTotCase1bis =  -A_01_L_i - A_02_L_i + log(h_01_L_i) - A_12_T_i + A_12_L_i + log(pow(h_12_T_i,delta2_i));
 
-  double den;
+  double den = 0;
   if(left_trunc){
     den = log(sum(exp(-A_01_T0_i - A_02_T0_i)))-log(S);
   }
@@ -361,8 +355,6 @@ List log_IC_2var_Case1bis(arma::vec sharedtype, List HB, arma::vec Gompertz, arm
   ret["SurvTotCase1bis"] = SurvTotCase1bis;
   ret["den"] = den;
   return ret;
-
-
 
 
 

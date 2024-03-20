@@ -361,7 +361,7 @@ List log_IC_2var_Case1(arma::vec sharedtype, List HB, arma::vec Gompertz, arma::
   arma::mat A_12_T_i_rep = arma::repelem(A_12_T_i,1,nb_pointsGK);
   arma::vec SurvTotCase1 = log((pow(h_12_T_i,delta2_i))%sum(A_01_L_R_i%exp(A_0_LR_red-A_12_T_i_rep),1));
 
-  double den;
+  double den = 0;
   if(left_trunc){
     den = log(sum(exp(-A_01_T0_i - A_02_T0_i)))-log(S);
   }

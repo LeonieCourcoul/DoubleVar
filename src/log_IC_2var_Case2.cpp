@@ -95,7 +95,7 @@ List log_IC_2var_Case2(arma::vec sharedtype, List HB, arma::vec Gompertz, arma::
     }
   }
   if(dep_var_intra_02){
-    h_02_T_i = h_02_T_i%exp(alpha_inter_02*sigma_intra);
+    h_02_T_i = h_02_T_i%exp(alpha_intra_02*sigma_intra);
     etaBaseline_02_T_i = etaBaseline_02_T_i + alpha_intra_02*sigma_intra;
     if(left_trunc){
       etaBaseline_02_T0_i = etaBaseline_02_T0_i + alpha_intra_02*sigma_intra;
@@ -245,9 +245,10 @@ List log_IC_2var_Case2(arma::vec sharedtype, List HB, arma::vec Gompertz, arma::
     A_02_T0_i = (exp(etaBaseline_02_T0_i)%survLong_02_T0_i*(Time_T0_i/2));
   }
 
+
   arma::vec SurvTotCase2 =  -A_01_T_i - A_02_T_i + log(pow(h_02_T_i,delta2_i));
 
-  double den;
+  double den = 0;
   if(left_trunc){
     den = log(sum(exp(-A_01_T0_i - A_02_T0_i)))-log(S);
   }
