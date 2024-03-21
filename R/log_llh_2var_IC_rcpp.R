@@ -274,6 +274,7 @@ log_llh_2var_IC_rcpp <- function(param,hazard_baseline_01, sharedtype_01,
     sigma_intra <- exp(mu.intra + b_intra)
     var.intra <- sigma_intra**2
   }
+  sigma_inter_intra <- list(sigma_inter, sigma_intra, sigma_inter**2+sigma_intra**2, sigma_inter**2, sigma_intra**2)
   ll_glob <- rep(NA, nbCase1 + nbCase1bis + nbCase2 + nbCase3)
 
   # Creations entrees rcpp
@@ -374,10 +375,21 @@ log_llh_2var_IC_rcpp <- function(param,hazard_baseline_01, sharedtype_01,
       if(left_trunc){
         Time_T0_i <- Time_T0[i]}
       delta2_i <- delta2[i]
+      X_base_i <- X_base[offset[i]:(offset[i+1]-1),]
+      X_base_i <- matrix(X_base_i, nrow = offset[i+1]-offset[i])
+      X_base_i <- unique(X_base_i)
+      U_i <- U_base[offset[i]:(offset[i+1]-1),]
+      U_i <- matrix(U_i, nrow = offset[i+1]-offset[i])
+      U_base_i <- unique(U_i)
+      y_i <- y.new[offset[i]:(offset[i+1]-1)]
+      ID.visit_i <- ID.visit[offset[i]:(offset[i+1]-1)]
+      offset_ID_i <- as.vector(c(1, 1 + cumsum(tapply(ID.visit_i, ID.visit_i, length))))
+      len_visit_i <- length(unique(ID.visit_i))
+
       log_ind_surv <- log_IC_2var_Case1(sharedtype, HB, Gompertz, Weibull,
                                         nb_points_integral, alpha_inter_intra,
                                         alpha_y_slope, alpha_z,  gamma_z0,  beta,  beta_slope,b_y,
-                                        b_y_slope,  wk,  rep_wk,  sigma_inter,  sigma_intra,
+                                        b_y_slope,  wk, rep_wk, sigma_inter_intra,
                                        delta2_i, Z_01_i, Z_02_i, Z_12_i, X_T_i,  U_T_i,
                                        Xslope_T_i,  Uslope_T_i,  X_GK_T_i,  U_GK_T_i,  Xslope_GK_T_i,
                                        Uslope_GK_T_i,  X_GK_L_R_i,  U_GK_L_R_i,  Xslope_GK_L_R_i,  Uslope_GK_L_R_i,
@@ -385,91 +397,16 @@ log_llh_2var_IC_rcpp <- function(param,hazard_baseline_01, sharedtype_01,
                                        X_GK_T0_i,  U_GK_T0_i,  Xslope_GK_T0_i,  Uslope_GK_T0_i,
                                        Time_T_i,  Time_L_R_i,  Time_T0_i, st_T_i,  st_0_LR_i,  st_L_R_i,  st_T0_i,
                                        ck,
-                                       B_T_i_01,  B_T_i_02,  B_T_i_12,
-                                       Bs_T_i_01,  Bs_T_i_02,  Bs_T_i_12,
+                                       B_T_i_12,
+                                       Bs_T_i_12,
                                        Bs_0_LR_i_01,  Bs_0_LR_i_02,  Bs_0_LR_i_12,
-                                       Bs_L_R_i_01,   Bs_L_R_i_02,  Bs_L_R_i_12,
-                                       Bs_T0_i_01,  Bs_T0_i_02,  Bs_T0_i_12,left_trunc
+                                       Bs_L_R_i_01,
+                                       Bs_T0_i_01,  Bs_T0_i_02,  left_trunc,
+                                       len_visit_i, X_base_i, U_base_i, y_i, offset_ID_i
       )
 
-      ## Longitudinal part
-      X_base_i <- X_base[offset[i]:(offset[i+1]-1),]
-      X_base_i <- matrix(X_base_i, nrow = offset[i+1]-offset[i])
-      U_i <- U_base[offset[i]:(offset[i+1]-1),]
-      U_i <- matrix(U_i, nrow = offset[i+1]-offset[i])
-      y_i <- y.new[offset[i]:(offset[i+1]-1)]
-      ID.visit_i <- ID.visit[offset[i]:(offset[i+1]-1)]
-      offset_ID_i <- as.vector(c(1, 1 + cumsum(tapply(ID.visit_i, ID.visit_i, length))))
-      f_Y_b_sigma <- rep(0,S)
-      for(id.visit in 1:length(unique(ID.visit_i))){
 
-        X_base_i.id.visit <- X_base_i[offset_ID_i[id.visit]:(offset_ID_i[id.visit+1]-1),]
-        X_base_i.id.visit <- matrix(X_base_i.id.visit, nrow = offset_ID_i[id.visit+1]-offset_ID_i[id.visit])
-        X_base_i.id.visit <- matrix(X_base_i.id.visit[1,], nrow = 1)
-
-        U_i.id.visit <- U_i[offset_ID_i[id.visit]:(offset_ID_i[id.visit+1]-1),]
-        U_i.id.visit <- matrix(U_i.id.visit, nrow = offset_ID_i[id.visit+1]-offset_ID_i[id.visit])
-        U_i.id.visit <- matrix(U_i.id.visit[1,],nrow=1)
-
-        y_i.id.visit <- y_i[offset_ID_i[id.visit]:(offset_ID_i[id.visit+1]-1)]
-
-        if(is.null(nrow(X_base_i.id.visit))){
-          stop("There is a something wrong")
-        }
-        else{
-          CV <- (X_base_i.id.visit%*%beta)[1,1] + b_y%*%t(U_i.id.visit)
-          n_ij <- length(y_i.id.visit)
-          if(n_ij == 1){
-            f_Y_b_sigma <- f_Y_b_sigma + log(dnorm(y_i.id.visit,CV,var.inter+var.intra))
-          }
-          else{
-            if(variability_inter_visit && variability_intra_visit){
-              if(n_ij == 2){
-                f_Y_b_sigma <- f_Y_b_sigma + log(1/(((2*pi)**(n_ij/2))*sqrt(var.intra*(2*var.inter+var.intra)))) -
-                  (1/(2*var.intra*(var.intra+2*var.inter)))*((((rep(y_i.id.visit[1],S)-CV)**2)*(var.intra+var.inter))-2*(var.inter*(rep(y_i.id.visit[1],S)-CV)*(rep(y_i.id.visit[2],S)-CV)) +
-                                                               (((rep(y_i.id.visit[2],S)-CV)**2)*(var.intra+var.inter)))
-              }
-              else{
-                if(n_ij == 3){
-                  f_Y_b_sigma <- f_Y_b_sigma + log(1/(((2*pi)**(n_ij/2))*var.intra*sqrt((3*var.inter+var.intra)))) -
-                    (1/(2*(var.intra**2)*(var.intra+3*var.inter)))*((var.intra*(var.intra+2*var.inter)*((rep(y_i.id.visit[1],S)-CV)**2 + (rep(y_i.id.visit[2],S)-CV)**2 + (rep(y_i.id.visit[3],S)-CV)**2))-
-                                                                      2*var.inter*var.intra*((rep(y_i.id.visit[1],S)-CV)*(rep(y_i.id.visit[2],S)-CV) + (rep(y_i.id.visit[1],S)-CV)*(rep(y_i.id.visit[3],S)-CV) + (rep(y_i.id.visit[2],S)-CV)*(rep(y_i.id.visit[3],S)-CV)))
-                }
-                else{
-                  somme1 <- 0
-                  somme2 <- 0
-                  for(k in 1:n_ij){
-                    somme1 <- somme1 + (rep(y_i.id.visit[k],S)-CV)**2
-                    if(k != n_ij){
-                      for(l in (k+1):n_ij){
-                        somme2 <- somme2 + (rep(y_i.id.visit[k],S)-CV)*(rep(y_i.id.visit[l],S)-CV)
-                      }
-                    }
-                  }
-                  f_Y_b_sigma <- f_Y_b_sigma + log(1/(((2*pi)**(n_ij/2))*sqrt((var.intra**(n_ij-1))*(var.intra+n_ij*var.inter)))) -
-                    (1/(2*(var.intra**(n_ij-1))*(var.intra+n_ij*var.inter)))*((var.intra**(n_ij-2))*(var.intra+(n_ij-1)*var.inter)*somme1 -
-                                                                                2*var.inter*(var.intra**(n_ij-2))*somme2)
-                }
-              }
-            }
-            else{
-              stop("Not implemented in this program.")
-            }
-          }
-
-
-        }
-      }
-
-      log_dens_int <- f_Y_b_sigma + log_ind_surv$SurvTotCase1
-      Clogexp <- max(log_dens_int) - 500
-      log_dens_int <- log_dens_int - Clogexp
-      log_dens <- Clogexp + log(sum(exp(log_dens_int))) - log(S)
-      ## Left truncation
-      if(left_trunc){
-        log_dens <- log_dens - log_ind_surv$den
-      }
-      ll_glob[i] <- log_dens
+      ll_glob[i] <- log_ind_surv
     }
   }
 
@@ -549,10 +486,21 @@ log_llh_2var_IC_rcpp <- function(param,hazard_baseline_01, sharedtype_01,
       }
       delta2_i <- delta2[i]
 
+      X_base_i <- X_base[offset[i]:(offset[i+1]-1),]
+      X_base_i <- matrix(X_base_i, nrow = offset[i+1]-offset[i])
+      X_base_i <- unique(X_base_i)
+      U_i <- U_base[offset[i]:(offset[i+1]-1),]
+      U_i <- matrix(U_i, nrow = offset[i+1]-offset[i])
+      U_base_i <- unique(U_i)
+      y_i <- y.new[offset[i]:(offset[i+1]-1)]
+      ID.visit_i <- ID.visit[offset[i]:(offset[i+1]-1)]
+      offset_ID_i <- as.vector(c(1, 1 + cumsum(tapply(ID.visit_i, ID.visit_i, length))))
+      len_visit_i <- length(unique(ID.visit_i))
+
       log_ind_surv <- log_IC_2var_Case1bis(sharedtype,  HB,  Gompertz,  Weibull,
                                            nb_points_integral, alpha_inter_intra,
                                            alpha_y_slope, alpha_z, gamma_z0, beta, beta_slope,
-                                           b_y, b_y_slope, wk, sigma_inter, sigma_intra,
+                                           b_y, b_y_slope, wk, sigma_inter_intra,
                                            delta2_i, Z_01_i,  Z_02_i,  Z_12_i,  X_T_i, U_T_i,
                                            Xslope_T_i,Uslope_T_i, X_GK_T_i,  U_GK_T_i,  Xslope_GK_T_i,
                                            Uslope_GK_T_i,  X_L_i,  U_L_i,
@@ -560,90 +508,15 @@ log_llh_2var_IC_rcpp <- function(param,hazard_baseline_01, sharedtype_01,
                                             Uslope_GK_L_i,
                                             X_GK_T0_i, U_GK_T0_i, Xslope_GK_T0_i, Uslope_GK_T0_i,
                                            Time_T_i, Time_L_i, Time_T0_i, st_T_i, st_L_i, st_T0_i,
-                                           B_T_i_01, B_T_i_02, B_T_i_12,
-                                           Bs_T_i_01, Bs_T_i_02,  Bs_T_i_12,
-                                           B_L_i_01, B_L_i_02,  B_L_i_12,
+                                             B_T_i_12,
+                                            Bs_T_i_12,
+                                           B_L_i_01,
                                            Bs_L_i_01, Bs_L_i_02, Bs_L_i_12,
-                                           Bs_T0_i_01, Bs_T0_i_02, Bs_T0_i_12, left_trunc
+                                           Bs_T0_i_01, Bs_T0_i_02, left_trunc,
+                                           len_visit_i, X_base_i, U_base_i, y_i, offset_ID_i
       )
-      ## Longitudinal part
-      X_base_i <- X_base[offset[i]:(offset[i+1]-1),]
-      X_base_i <- matrix(X_base_i, nrow = offset[i+1]-offset[i])
-      U_i <- U_base[offset[i]:(offset[i+1]-1),]
-      U_i <- matrix(U_i, nrow = offset[i+1]-offset[i])
-      y_i <- y.new[offset[i]:(offset[i+1]-1)]
-      ID.visit_i <- ID.visit[offset[i]:(offset[i+1]-1)]
-      offset_ID_i <- as.vector(c(1, 1 + cumsum(tapply(ID.visit_i, ID.visit_i, length))))
-      f_Y_b_sigma <- rep(0,S)
-      for(id.visit in 1:length(unique(ID.visit_i))){
 
-        X_base_i.id.visit <- X_base_i[offset_ID_i[id.visit]:(offset_ID_i[id.visit+1]-1),]
-        X_base_i.id.visit <- matrix(X_base_i.id.visit, nrow = offset_ID_i[id.visit+1]-offset_ID_i[id.visit])
-        X_base_i.id.visit <- matrix(X_base_i.id.visit[1,], nrow = 1)
-
-        U_i.id.visit <- U_i[offset_ID_i[id.visit]:(offset_ID_i[id.visit+1]-1),]
-        U_i.id.visit <- matrix(U_i.id.visit, nrow = offset_ID_i[id.visit+1]-offset_ID_i[id.visit])
-        U_i.id.visit <- matrix(U_i.id.visit[1,],nrow=1)
-
-        y_i.id.visit <- y_i[offset_ID_i[id.visit]:(offset_ID_i[id.visit+1]-1)]
-
-        if(is.null(nrow(X_base_i.id.visit))){
-          stop("There is a something wrong")
-        }
-        else{
-          CV <- (X_base_i.id.visit%*%beta)[1,1] + b_y%*%t(U_i.id.visit)
-          n_ij <- length(y_i.id.visit)
-          if(n_ij == 1){
-            f_Y_b_sigma <- f_Y_b_sigma + log(dnorm(y_i.id.visit,CV,var.inter+var.intra))
-          }
-          else{
-            if(variability_inter_visit && variability_intra_visit){
-              if(n_ij == 2){
-                f_Y_b_sigma <- f_Y_b_sigma + log(1/(((2*pi)**(n_ij/2))*sqrt(var.intra*(2*var.inter+var.intra)))) -
-                  (1/(2*var.intra*(var.intra+2*var.inter)))*((((rep(y_i.id.visit[1],S)-CV)**2)*(var.intra+var.inter))-2*(var.inter*(rep(y_i.id.visit[1],S)-CV)*(rep(y_i.id.visit[2],S)-CV)) +
-                                                               (((rep(y_i.id.visit[2],S)-CV)**2)*(var.intra+var.inter)))
-              }
-              else{
-                if(n_ij == 3){
-                  f_Y_b_sigma <- f_Y_b_sigma + log(1/(((2*pi)**(n_ij/2))*var.intra*sqrt((3*var.inter+var.intra)))) -
-                    (1/(2*(var.intra**2)*(var.intra+3*var.inter)))*((var.intra*(var.intra+2*var.inter)*((rep(y_i.id.visit[1],S)-CV)**2 + (rep(y_i.id.visit[2],S)-CV)**2 + (rep(y_i.id.visit[3],S)-CV)**2))-
-                                                                      2*var.inter*var.intra*((rep(y_i.id.visit[1],S)-CV)*(rep(y_i.id.visit[2],S)-CV) + (rep(y_i.id.visit[1],S)-CV)*(rep(y_i.id.visit[3],S)-CV) + (rep(y_i.id.visit[2],S)-CV)*(rep(y_i.id.visit[3],S)-CV)))
-                }
-                else{
-                  somme1 <- 0
-                  somme2 <- 0
-                  for(k in 1:n_ij){
-                    somme1 <- somme1 + (rep(y_i.id.visit[k],S)-CV)**2
-                    if(k != n_ij){
-                      for(l in (k+1):n_ij){
-                        somme2 <- somme2 + (rep(y_i.id.visit[k],S)-CV)*(rep(y_i.id.visit[l],S)-CV)
-                      }
-                    }
-                  }
-                  f_Y_b_sigma <- f_Y_b_sigma + log(1/(((2*pi)**(n_ij/2))*sqrt((var.intra**(n_ij-1))*(var.intra+n_ij*var.inter)))) -
-                    (1/(2*(var.intra**(n_ij-1))*(var.intra+n_ij*var.inter)))*((var.intra**(n_ij-2))*(var.intra+(n_ij-1)*var.inter)*somme1 -
-                                                                                2*var.inter*(var.intra**(n_ij-2))*somme2)
-                }
-              }
-            }
-            else{
-              stop("Not implemented in this program.")
-            }
-          }
-
-
-        }
-      }
-
-      log_dens_int <- f_Y_b_sigma + log_ind_surv$SurvTotCase1bis
-      Clogexp <- max(log_dens_int) - 500
-      log_dens_int <- log_dens_int - Clogexp
-      log_dens <- Clogexp + log(sum(exp(log_dens_int))) - log(S)
-      ## Left truncation
-      if(left_trunc){
-        log_dens <- log_dens - log_ind_surv$den
-      }
-      ll_glob[i+nbCase1] <- log_dens
+      ll_glob[i+nbCase1] <- log_ind_surv
     }
   }
   if(nbCase2 != 0){
@@ -706,10 +579,22 @@ log_llh_2var_IC_rcpp <- function(param,hazard_baseline_01, sharedtype_01,
         Time_T0_i <- Time_T0[i]
       }
       delta2_i <- delta2[i]
+
+      X_base_i <- X_base[offset[i]:(offset[i+1]-1),]
+      X_base_i <- matrix(X_base_i, nrow = offset[i+1]-offset[i])
+      X_base_i <- unique(X_base_i)
+      U_i <- U_base[offset[i]:(offset[i+1]-1),]
+      U_i <- matrix(U_i, nrow = offset[i+1]-offset[i])
+      U_base_i <- unique(U_i)
+      y_i <- y.new[offset[i]:(offset[i+1]-1)]
+      ID.visit_i <- ID.visit[offset[i]:(offset[i+1]-1)]
+      offset_ID_i <- as.vector(c(1, 1 + cumsum(tapply(ID.visit_i, ID.visit_i, length))))
+      len_visit_i <- length(unique(ID.visit_i))
+
       log_ind_surv <- log_IC_2var_Case2(sharedtype, HB, Gompertz, Weibull,
                                         nb_points_integral, alpha_inter_intra,
                                         alpha_y_slope, alpha_z, gamma_z0,  beta,  beta_slope,
-                                        b_y,  b_y_slope,  wk,  sigma_inter,  sigma_intra,
+                                        b_y,  b_y_slope,  wk,  sigma_inter_intra,
                                         delta2_i, Z_01_i, Z_02_i, X_T_i,  U_T_i,
                                         Xslope_T_i,  Uslope_T_i,  X_GK_T_i,  U_GK_T_i,  Xslope_GK_T_i,
                                         Uslope_GK_T_i,
@@ -717,87 +602,11 @@ log_llh_2var_IC_rcpp <- function(param,hazard_baseline_01, sharedtype_01,
                                         Time_T_i,   Time_T0_i, st_T_i,   st_T0_i,
                                         B_T_i_02,
                                         Bs_T_i_01,  Bs_T_i_02,
-                                        Bs_T0_i_01,  Bs_T0_i_02,  left_trunc
+                                        Bs_T0_i_01,  Bs_T0_i_02,  left_trunc,
+                                        len_visit_i, X_base_i, U_base_i, y_i, offset_ID_i
       )
-      ## Longitudinal part
-      X_base_i <- X_base[offset[i]:(offset[i+1]-1),]
-      X_base_i <- matrix(X_base_i, nrow = offset[i+1]-offset[i])
-      U_i <- U_base[offset[i]:(offset[i+1]-1),]
-      U_i <- matrix(U_i, nrow = offset[i+1]-offset[i])
-      y_i <- y.new[offset[i]:(offset[i+1]-1)]
-      ID.visit_i <- ID.visit[offset[i]:(offset[i+1]-1)]
-      offset_ID_i <- as.vector(c(1, 1 + cumsum(tapply(ID.visit_i, ID.visit_i, length))))
-      f_Y_b_sigma <- rep(0,S)
-      for(id.visit in 1:length(unique(ID.visit_i))){
 
-        X_base_i.id.visit <- X_base_i[offset_ID_i[id.visit]:(offset_ID_i[id.visit+1]-1),]
-        X_base_i.id.visit <- matrix(X_base_i.id.visit, nrow = offset_ID_i[id.visit+1]-offset_ID_i[id.visit])
-        X_base_i.id.visit <- matrix(X_base_i.id.visit[1,], nrow = 1)
-
-        U_i.id.visit <- U_i[offset_ID_i[id.visit]:(offset_ID_i[id.visit+1]-1),]
-        U_i.id.visit <- matrix(U_i.id.visit, nrow = offset_ID_i[id.visit+1]-offset_ID_i[id.visit])
-        U_i.id.visit <- matrix(U_i.id.visit[1,],nrow=1)
-
-        y_i.id.visit <- y_i[offset_ID_i[id.visit]:(offset_ID_i[id.visit+1]-1)]
-
-        if(is.null(nrow(X_base_i.id.visit))){
-          stop("There is a something wrong")
-        }
-        else{
-          CV <- (X_base_i.id.visit%*%beta)[1,1] + b_y%*%t(U_i.id.visit)
-          n_ij <- length(y_i.id.visit)
-          if(n_ij == 1){
-            f_Y_b_sigma <- f_Y_b_sigma + log(dnorm(y_i.id.visit,CV,var.inter+var.intra))
-          }
-          else{
-            if(variability_inter_visit && variability_intra_visit){
-              if(n_ij == 2){
-                f_Y_b_sigma <- f_Y_b_sigma + log(1/(((2*pi)**(n_ij/2))*sqrt(var.intra*(2*var.inter+var.intra)))) -
-                  (1/(2*var.intra*(var.intra+2*var.inter)))*((((rep(y_i.id.visit[1],S)-CV)**2)*(var.intra+var.inter))-2*(var.inter*(rep(y_i.id.visit[1],S)-CV)*(rep(y_i.id.visit[2],S)-CV)) +
-                                                               (((rep(y_i.id.visit[2],S)-CV)**2)*(var.intra+var.inter)))
-              }
-              else{
-                if(n_ij == 3){
-                  f_Y_b_sigma <- f_Y_b_sigma + log(1/(((2*pi)**(n_ij/2))*var.intra*sqrt((3*var.inter+var.intra)))) -
-                    (1/(2*(var.intra**2)*(var.intra+3*var.inter)))*((var.intra*(var.intra+2*var.inter)*((rep(y_i.id.visit[1],S)-CV)**2 + (rep(y_i.id.visit[2],S)-CV)**2 + (rep(y_i.id.visit[3],S)-CV)**2))-
-                                                                      2*var.inter*var.intra*((rep(y_i.id.visit[1],S)-CV)*(rep(y_i.id.visit[2],S)-CV) + (rep(y_i.id.visit[1],S)-CV)*(rep(y_i.id.visit[3],S)-CV) + (rep(y_i.id.visit[2],S)-CV)*(rep(y_i.id.visit[3],S)-CV)))
-                }
-                else{
-                  somme1 <- 0
-                  somme2 <- 0
-                  for(k in 1:n_ij){
-                    somme1 <- somme1 + (rep(y_i.id.visit[k],S)-CV)**2
-                    if(k != n_ij){
-                      for(l in (k+1):n_ij){
-                        somme2 <- somme2 + (rep(y_i.id.visit[k],S)-CV)*(rep(y_i.id.visit[l],S)-CV)
-                      }
-                    }
-                  }
-                  f_Y_b_sigma <- f_Y_b_sigma + log(1/(((2*pi)**(n_ij/2))*sqrt((var.intra**(n_ij-1))*(var.intra+n_ij*var.inter)))) -
-                    (1/(2*(var.intra**(n_ij-1))*(var.intra+n_ij*var.inter)))*((var.intra**(n_ij-2))*(var.intra+(n_ij-1)*var.inter)*somme1 -
-                                                                                2*var.inter*(var.intra**(n_ij-2))*somme2)
-                }
-              }
-            }
-            else{
-              stop("Not implemented in this program.")
-            }
-          }
-
-
-        }
-      }
-
-      log_dens_int <- f_Y_b_sigma + log_ind_surv$SurvTotCase2
-      Clogexp <- max(log_dens_int) - 500
-      log_dens_int <- log_dens_int - Clogexp
-      log_dens <- Clogexp + log(sum(exp(log_dens_int))) - log(S)
-      ## Left truncation
-      if(left_trunc){
-        log_dens <- log_dens - log_ind_surv$den
-      }
-
-      ll_glob[i+nbCase1+nbCase1bis] <- log_dens
+      ll_glob[i+nbCase1+nbCase1bis] <- log_ind_surv
 
     }
   }
@@ -890,10 +699,21 @@ log_llh_2var_IC_rcpp <- function(param,hazard_baseline_01, sharedtype_01,
       }
       delta2_i <- delta2[i]
 
+      X_base_i <- X_base[offset[i]:(offset[i+1]-1),]
+      X_base_i <- matrix(X_base_i, nrow = offset[i+1]-offset[i])
+      X_base_i <- unique(X_base_i)
+      U_i <- U_base[offset[i]:(offset[i+1]-1),]
+      U_i <- matrix(U_i, nrow = offset[i+1]-offset[i])
+      U_base_i <- unique(U_i)
+      y_i <- y.new[offset[i]:(offset[i+1]-1)]
+      ID.visit_i <- ID.visit[offset[i]:(offset[i+1]-1)]
+      offset_ID_i <- as.vector(c(1, 1 + cumsum(tapply(ID.visit_i, ID.visit_i, length))))
+      len_visit_i <- length(unique(ID.visit_i))
+
       log_ind_surv <- log_IC_2var_Case3( sharedtype,  HB,  Gompertz,  Weibull,
                                          nb_points_integral,  alpha_inter_intra,
                                          alpha_y_slope,  alpha_z,  gamma_z0,  beta,  beta_slope,
-                                         b_y,  b_y_slope,  wk,  rep_wk,  sigma_inter,  sigma_intra,
+                                         b_y,  b_y_slope,  wk,  rep_wk,  sigma_inter_intra,
                                          delta2_i,  Z_01_i,  Z_02_i,  Z_12_i,  X_T_i,  U_T_i,
                                          Xslope_T_i,  Uslope_T_i,  X_GK_T_i,  U_GK_T_i,  Xslope_GK_T_i,
                                          Uslope_GK_T_i,  X_GK_L_T_i,  U_GK_L_T_i,  Xslope_GK_L_T_i,  Uslope_GK_L_T_i,
@@ -901,90 +721,15 @@ log_llh_2var_IC_rcpp <- function(param,hazard_baseline_01, sharedtype_01,
                                          X_GK_T0_i,  U_GK_T0_i,  Xslope_GK_T0_i,  Uslope_GK_T0_i,
                                          Time_T_i,  Time_L_T_i,  Time_T0_i, st_T_i,  st_0_LT_i,  st_L_T_i,  st_T0_i,
                                          ck,
-                                         B_T_i_01,  B_T_i_02,  B_T_i_12,
+                                         B_T_i_02,  B_T_i_12,
                                          Bs_T_i_01,  Bs_T_i_02,  Bs_T_i_12,
                                          Bs_0_LT_i_01,  Bs_0_LT_i_02,  Bs_0_LT_i_12,
-                                         Bs_L_T_i_01,   Bs_L_T_i_02,  Bs_L_T_i_12,
-                                         Bs_T0_i_01,  Bs_T0_i_02, left_trunc)
+                                         Bs_L_T_i_01,   Bs_T0_i_01,  Bs_T0_i_02, left_trunc,
+                                         len_visit_i, X_base_i, U_base_i, y_i, offset_ID_i
+                                         )
 #
-      ## Longitudinal part
-      X_base_i <- X_base[offset[i]:(offset[i+1]-1),]
-      X_base_i <- matrix(X_base_i, nrow = offset[i+1]-offset[i])
-      U_i <- U_base[offset[i]:(offset[i+1]-1),]
-      U_i <- matrix(U_i, nrow = offset[i+1]-offset[i])
-      y_i <- y.new[offset[i]:(offset[i+1]-1)]
-      ID.visit_i <- ID.visit[offset[i]:(offset[i+1]-1)]
-      offset_ID_i <- as.vector(c(1, 1 + cumsum(tapply(ID.visit_i, ID.visit_i, length))))
-      f_Y_b_sigma <- rep(0,S)
-      for(id.visit in 1:length(unique(ID.visit_i))){
 
-        X_base_i.id.visit <- X_base_i[offset_ID_i[id.visit]:(offset_ID_i[id.visit+1]-1),]
-        X_base_i.id.visit <- matrix(X_base_i.id.visit, nrow = offset_ID_i[id.visit+1]-offset_ID_i[id.visit])
-        X_base_i.id.visit <- matrix(X_base_i.id.visit[1,], nrow = 1)
-
-        U_i.id.visit <- U_i[offset_ID_i[id.visit]:(offset_ID_i[id.visit+1]-1),]
-        U_i.id.visit <- matrix(U_i.id.visit, nrow = offset_ID_i[id.visit+1]-offset_ID_i[id.visit])
-        U_i.id.visit <- matrix(U_i.id.visit[1,],nrow=1)
-
-        y_i.id.visit <- y_i[offset_ID_i[id.visit]:(offset_ID_i[id.visit+1]-1)]
-
-        if(is.null(nrow(X_base_i.id.visit))){
-          stop("There is a something wrong")
-        }
-        else{
-          CV <- (X_base_i.id.visit%*%beta)[1,1] + b_y%*%t(U_i.id.visit)
-          n_ij <- length(y_i.id.visit)
-          if(n_ij == 1){
-            f_Y_b_sigma <- f_Y_b_sigma + log(dnorm(y_i.id.visit,CV,var.inter+var.intra))
-          }
-          else{
-            if(variability_inter_visit && variability_intra_visit){
-              if(n_ij == 2){
-                f_Y_b_sigma <- f_Y_b_sigma + log(1/(((2*pi)**(n_ij/2))*sqrt(var.intra*(2*var.inter+var.intra)))) -
-                  (1/(2*var.intra*(var.intra+2*var.inter)))*((((rep(y_i.id.visit[1],S)-CV)**2)*(var.intra+var.inter))-2*(var.inter*(rep(y_i.id.visit[1],S)-CV)*(rep(y_i.id.visit[2],S)-CV)) +
-                                                               (((rep(y_i.id.visit[2],S)-CV)**2)*(var.intra+var.inter)))
-              }
-              else{
-                if(n_ij == 3){
-                  f_Y_b_sigma <- f_Y_b_sigma + log(1/(((2*pi)**(n_ij/2))*var.intra*sqrt((3*var.inter+var.intra)))) -
-                    (1/(2*(var.intra**2)*(var.intra+3*var.inter)))*((var.intra*(var.intra+2*var.inter)*((rep(y_i.id.visit[1],S)-CV)**2 + (rep(y_i.id.visit[2],S)-CV)**2 + (rep(y_i.id.visit[3],S)-CV)**2))-
-                                                                      2*var.inter*var.intra*((rep(y_i.id.visit[1],S)-CV)*(rep(y_i.id.visit[2],S)-CV) + (rep(y_i.id.visit[1],S)-CV)*(rep(y_i.id.visit[3],S)-CV) + (rep(y_i.id.visit[2],S)-CV)*(rep(y_i.id.visit[3],S)-CV)))
-                }
-                else{
-                  somme1 <- 0
-                  somme2 <- 0
-                  for(k in 1:n_ij){
-                    somme1 <- somme1 + (rep(y_i.id.visit[k],S)-CV)**2
-                    if(k != n_ij){
-                      for(l in (k+1):n_ij){
-                        somme2 <- somme2 + (rep(y_i.id.visit[k],S)-CV)*(rep(y_i.id.visit[l],S)-CV)
-                      }
-                    }
-                  }
-                  f_Y_b_sigma <- f_Y_b_sigma + log(1/(((2*pi)**(n_ij/2))*sqrt((var.intra**(n_ij-1))*(var.intra+n_ij*var.inter)))) -
-                    (1/(2*(var.intra**(n_ij-1))*(var.intra+n_ij*var.inter)))*((var.intra**(n_ij-2))*(var.intra+(n_ij-1)*var.inter)*somme1 -
-                                                                                2*var.inter*(var.intra**(n_ij-2))*somme2)
-                }
-              }
-            }
-            else{
-              stop("Not implemented in this program.")
-            }
-          }
-
-
-        }
-      }
-
-      log_dens_int <- f_Y_b_sigma + log_ind_surv$SurvTotCase3
-      Clogexp <- max(log_dens_int) - 500
-      log_dens_int <- log_dens_int - Clogexp
-      log_dens <- Clogexp + log(sum(exp(log_dens_int))) - log(S)
-      ## Left truncation
-      if(left_trunc){
-        log_dens <- log_dens - log_ind_surv$den
-      }
-      ll_glob[i+nbCase1+nbCase1bis+nbCase2] <- log_dens
+      ll_glob[i+nbCase1+nbCase1bis+nbCase2] <- log_ind_surv
 
 
     }

@@ -11,10 +11,10 @@ using namespace std;
 
 // [[Rcpp::export]]
 
-List log_IC_2var_Case1bis(arma::vec sharedtype, List HB, arma::vec Gompertz, arma::vec Weibull,
+double log_IC_2var_Case1bis(arma::vec sharedtype, List HB, arma::vec Gompertz, arma::vec Weibull,
                            arma::vec nb_points_integral, arma::vec alpha_inter_intra,
                            arma::vec alpha_y_slope, List alpha_z, List gamma, arma::vec beta, arma::vec beta_slope,
-                           arma::mat b_y, arma::mat b_y_slope, arma::vec wk, arma::vec sigma_inter, arma::vec sigma_intra,
+                           arma::mat b_y, arma::mat b_y_slope, arma::vec wk, List sigma_inter_intra,
                            int delta2_i, arma::rowvec Z_01_i, arma::rowvec Z_02_i, arma::rowvec Z_12_i, arma::rowvec X_T_i, arma::vec U_T_i,
                            arma::rowvec Xslope_T_i, arma::vec Uslope_T_i, arma::mat X_GK_T_i, arma::mat U_GK_T_i, arma::mat Xslope_GK_T_i,
                            arma::mat Uslope_GK_T_i, arma::rowvec X_L_i, arma::vec U_L_i,
@@ -22,11 +22,12 @@ List log_IC_2var_Case1bis(arma::vec sharedtype, List HB, arma::vec Gompertz, arm
                            arma::mat Uslope_GK_L_i,
                            arma::mat X_GK_T0_i, arma::mat U_GK_T0_i, arma::mat Xslope_GK_T0_i, arma::mat Uslope_GK_T0_i,
                            double Time_T_i, double Time_L_i, double Time_T0_i,arma::vec st_T_i, arma::vec st_L_i, arma::vec st_T0_i,
-                           arma::vec B_T_i_01, arma::vec B_T_i_02, arma::vec B_T_i_12,
-                           arma::mat Bs_T_i_01, arma::mat Bs_T_i_02, arma::mat Bs_T_i_12,
-                           arma::vec B_L_i_01, arma::vec B_L_i_02, arma::vec B_L_i_12,
+                           arma::vec B_T_i_12,
+                           arma::mat Bs_T_i_12,
+                           arma::vec B_L_i_01,
                            arma::mat Bs_L_i_01, arma::mat Bs_L_i_02, arma::mat Bs_L_i_12,
-                           arma::mat Bs_T0_i_01, arma::mat Bs_T0_i_02, arma::mat Bs_T0_i_12, bool left_trunc
+                           arma::mat Bs_T0_i_01, arma::mat Bs_T0_i_02, bool left_trunc,
+                           int len_visit_i, arma::mat X_base_i, arma::mat U_base_i,  arma::vec y_i, arma::vec offset_ID_i
 ){
 
   // parameters
@@ -74,6 +75,11 @@ List log_IC_2var_Case1bis(arma::vec sharedtype, List HB, arma::vec Gompertz, arm
   arma::vec gamma_01 = gamma[0];
   arma::vec gamma_02 = gamma[1];
   arma::vec gamma_12 = gamma[2];
+  arma::vec sigma_inter = sigma_inter_intra[0];
+  arma::vec sigma_intra = sigma_inter_intra[1];
+  arma::vec sigma_long = sigma_inter_intra[2];
+  arma::vec var_inter = sigma_inter_intra[3];
+  arma::vec var_intra = sigma_inter_intra[4];
 
   // Survival part
   ///// h
@@ -343,19 +349,46 @@ List log_IC_2var_Case1bis(arma::vec sharedtype, List HB, arma::vec Gompertz, arm
 
   arma::vec SurvTotCase1bis =  -A_01_L_i - A_02_L_i + log(h_01_L_i) - A_12_T_i + A_12_L_i + log(pow(h_12_T_i,delta2_i));
 
-  double den = 0;
-  if(left_trunc){
-    den = log(sum(exp(-A_01_T0_i - A_02_T0_i)))-log(S);
+  arma::vec f_Y_b_sigma(S,fill::zeros);
+  arma::mat X_base_i_id_visit;
+  arma::mat U_base_i_id_visit;
+  arma::vec y_i_id_visit;
+  arma::mat CV_long;
+  arma::vec corr_intra_inter = var_intra%(2*var_inter+var_intra);
+  for(int idvisit = 0; idvisit < len_visit_i; ++idvisit ){
+    X_base_i_id_visit = X_base_i.row(idvisit);
+    U_base_i_id_visit = U_base_i.row(idvisit);
+    y_i_id_visit = y_i.subvec(offset_ID_i(idvisit)-1,offset_ID_i(idvisit+1)-2);
+    int n_ij = y_i_id_visit.n_elem;
+    CV_long = dot(beta,X_base_i_id_visit) + b_y*U_base_i_id_visit.t() ;
+    if( n_ij == 1){
+      f_Y_b_sigma = f_Y_b_sigma + log(1.0 / (sqrt(2.0*M_PI)*sigma_long)) - 0.5*pow((y_i_id_visit-CV_long)/sigma_long,2);
+    }
+    else{
+      if(n_ij == 2){
+        f_Y_b_sigma = f_Y_b_sigma + log(1/((pow(2*M_PI,n_ij/2))*sqrt(corr_intra_inter))) -
+          (1/(2*corr_intra_inter))%((pow((y_i_id_visit(0)-CV_long),2)%sigma_long)-2*(var_inter%(y_i_id_visit(0)-CV_long)%(y_i_id_visit(1)-CV_long)) + (pow(y_i_id_visit(1)-CV_long,2)%(sigma_long)));
+      }
+    }
+
+    // COMPLETER AVEC LES AUTRES CAS (n_ij > 3) et variability intra et inter ou non
+
   }
 
 
+  arma::vec log_dens_int;
+  double Clogexp;
+  double log_dens;
+  log_dens_int = f_Y_b_sigma + SurvTotCase1bis;
+  Clogexp = max(log_dens_int) - 500;
+  log_dens_int = log_dens_int - Clogexp;
+  log_dens = Clogexp + log(sum(exp(log_dens_int))) - log(S);
+  double den = 0;
+  if(left_trunc){
+    den = log(sum(exp(-A_01_T0_i - A_02_T0_i)))-log(S);
+    log_dens = log_dens - den;
+  }
 
-
-  List ret;
-  ret["SurvTotCase1bis"] = SurvTotCase1bis;
-  ret["den"] = den;
-  return ret;
-
-
-
+  return log_dens;
 }
+
