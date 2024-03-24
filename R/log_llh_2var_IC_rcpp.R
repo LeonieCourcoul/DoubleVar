@@ -406,6 +406,7 @@ log_llh_2var_IC_rcpp <- function(param,hazard_baseline_01, sharedtype_01,
       )
 
 
+
       ll_glob[i] <- log_ind_surv
     }
   }

@@ -226,7 +226,7 @@ double log_IC_2var_Case3(arma::vec sharedtype, List HB, arma::vec Gompertz, arma
   ///////// 1-2
   double h_0_12_T_i;
   arma::vec h_0_GK_12_T_i;
-  arma::vec h_0_GK_12_0_LT_i;
+  arma::mat h_0_GK_12_0_LT_i;
   if(hazard_baseline_12 == "Exponential"){
     h_0_12_T_i = 1;
     h_0_GK_12_T_i = wk;
@@ -236,18 +236,20 @@ double log_IC_2var_Case3(arma::vec sharedtype, List HB, arma::vec Gompertz, arma
     h_0_12_T_i = shape_12*(pow(Time_T_i,(shape_12-1)));
     h_0_GK_12_T_i = shape_12*(pow(st_T_i,shape_12-1))%wk;
     h_0_GK_12_0_LT_i = shape_12*(pow(st_0_LT_i,shape_12-1));
-    h_0_GK_12_0_LT_i = h_0_GK_12_0_LT_i.t()%rep_wk;
+    arma::rowvec  h_0_GK_12_0_LT_i2 = vectorise(h_0_GK_12_0_LT_i,1);
+    h_0_GK_12_0_LT_i = h_0_GK_12_0_LT_i2%rep_wk.t();
   }
   if(hazard_baseline_12 == "Gompertz"){
     h_0_12_T_i = Gompertz_1_12*exp(Gompertz_2_12*Time_T_i);
     h_0_GK_12_T_i = Gompertz_1_12*exp(Gompertz_2_12*st_T_i)%wk;
     h_0_GK_12_0_LT_i = Gompertz_1_12*exp(Gompertz_2_12*st_0_LT_i);
-    h_0_GK_12_0_LT_i = h_0_GK_12_0_LT_i.t()%rep_wk;
+    arma::rowvec  h_0_GK_12_0_LT_i2 = vectorise(h_0_GK_12_0_LT_i,1);
+    h_0_GK_12_0_LT_i = h_0_GK_12_0_LT_i2%rep_wk.t();
   }
   if(hazard_baseline_12 == "Splines"){
     h_0_12_T_i = exp(arma::dot(gamma_12,B_T_i_12));
     h_0_GK_12_T_i = wk%exp(Bs_T_i_12*gamma_12);
-    h_0_GK_12_0_LT_i = exp(Bs_0_LT_i_12*gamma_12)%rep_wk;
+    h_0_GK_12_0_LT_i = (exp(Bs_0_LT_i_12*gamma_12)%rep_wk).t();
   }
   double predsurv_12;
   if(Z_12_i.is_empty()){
@@ -266,13 +268,13 @@ double log_IC_2var_Case3(arma::vec sharedtype, List HB, arma::vec Gompertz, arma
 
   etaBaseline_12_0_LT_i = exp(etaBaseline_12_0_LT_i + predsurv_12);
   survLong_12_0_LT_i = exp(survLong_12_0_LT_i);
-  survLong_12_0_LT_i = survLong_12_0_LT_i%arma::repelem(h_0_GK_12_0_LT_i.t(),S,1);
+  survLong_12_0_LT_i = survLong_12_0_LT_i%arma::repelem(h_0_GK_12_0_LT_i,S,1);
   arma::mat A_12_0_LT_i;
   A_12_0_LT_i = arma::repelem(etaBaseline_12_0_LT_i,1,nb_pointsGK*nb_pointsGK)%survLong_12_0_LT_i;
 
   ///////// 0-1
   arma::vec h_0_GK_01_L_T_i;
-  arma::vec h_0_GK_01_0_LT_i;
+  arma::mat h_0_GK_01_0_LT_i;
   arma::vec h_0_GK_01_T0_i;
   arma::vec h_0_GK_01_T_i;
   if(hazard_baseline_01 == "Exponential"){
@@ -287,16 +289,19 @@ double log_IC_2var_Case3(arma::vec sharedtype, List HB, arma::vec Gompertz, arma
     h_0_GK_01_T_i = shape_01*(pow(st_T_i,shape_01-1))%wk;
     h_0_GK_01_L_T_i = shape_01*(pow(st_L_T_i,shape_01-1))%wk;
     h_0_GK_01_0_LT_i = shape_01*(pow(st_0_LT_i,shape_01-1));
-    h_0_GK_01_0_LT_i = h_0_GK_01_0_LT_i.t()%rep_wk;
+    arma::rowvec  h_0_GK_01_0_LT_i2 = vectorise(h_0_GK_01_0_LT_i,1);
+    h_0_GK_01_0_LT_i = h_0_GK_01_0_LT_i2%rep_wk.t();
     if(left_trunc){
-      h_0_GK_01_T0_i = shape_01*(pow(st_T0_i,shape_01-1));
+      h_0_GK_01_T0_i = shape_01*(pow(st_T0_i,shape_01-1))%wk;
     }
   }
   if(hazard_baseline_01 == "Gompertz"){
     h_0_GK_01_T_i = Gompertz_1_01*exp(Gompertz_2_01*st_T_i)%wk;
     h_0_GK_01_L_T_i = Gompertz_1_01*exp(Gompertz_2_01*st_L_T_i)%wk;
+
     h_0_GK_01_0_LT_i = Gompertz_1_01*exp(Gompertz_2_01*st_0_LT_i);
-    h_0_GK_01_0_LT_i = h_0_GK_01_0_LT_i.t()%rep_wk;
+    arma::rowvec  h_0_GK_01_0_LT_i2 = vectorise(h_0_GK_01_0_LT_i,1);
+    h_0_GK_01_0_LT_i = h_0_GK_01_0_LT_i2%rep_wk.t();
     if(left_trunc){
       h_0_GK_01_T0_i = Gompertz_1_01*exp(st_T0_i*Gompertz_2_01)%wk;
     }
@@ -304,7 +309,7 @@ double log_IC_2var_Case3(arma::vec sharedtype, List HB, arma::vec Gompertz, arma
   if(hazard_baseline_01 == "Splines"){
     h_0_GK_01_T_i = wk%exp(Bs_T_i_01*gamma_01);
     h_0_GK_01_L_T_i = wk%exp(Bs_L_T_i_01*gamma_01);
-    h_0_GK_01_0_LT_i = exp(Bs_0_LT_i_01*gamma_01)%rep_wk;
+    h_0_GK_01_0_LT_i = (exp(Bs_0_LT_i_01*gamma_01)%rep_wk).t();
     if(left_trunc){
       h_0_GK_01_T0_i = wk%exp(Bs_T0_i_01*gamma_01);
     }
@@ -328,7 +333,7 @@ double log_IC_2var_Case3(arma::vec sharedtype, List HB, arma::vec Gompertz, arma
 
   etaBaseline_01_0_LT_i = exp(etaBaseline_01_0_LT_i + predsurv_01);
   survLong_01_0_LT_i = exp(survLong_01_0_LT_i);
-  survLong_01_0_LT_i = survLong_01_0_LT_i%arma::repelem(h_0_GK_01_0_LT_i.t(),S,1);
+  survLong_01_0_LT_i = survLong_01_0_LT_i%arma::repelem(h_0_GK_01_0_LT_i,S,1);
   arma::mat A_01_0_LT_i;
   A_01_0_LT_i = arma::repelem(etaBaseline_01_0_LT_i,1,nb_pointsGK*nb_pointsGK)%survLong_01_0_LT_i;
 
@@ -340,7 +345,7 @@ double log_IC_2var_Case3(arma::vec sharedtype, List HB, arma::vec Gompertz, arma
   }
 
   ///////// 0-2
-  arma::vec h_0_GK_02_0_LT_i;
+  arma::mat h_0_GK_02_0_LT_i;
   arma::vec h_0_GK_02_T0_i;
   arma::vec h_0_GK_02_T_i;
   double h_0_02_T_i;
@@ -353,19 +358,23 @@ double log_IC_2var_Case3(arma::vec sharedtype, List HB, arma::vec Gompertz, arma
     }
   }
   if(hazard_baseline_02 == "Weibull"){
+    h_0_GK_02_0_LT_i = shape_02*(pow(st_0_LT_i,shape_02-1));
+    arma::rowvec  h_0_GK_02_0_LT_i2 = vectorise(h_0_GK_02_0_LT_i,1);
+    h_0_GK_02_0_LT_i = h_0_GK_02_0_LT_i2%rep_wk.t();
     h_0_02_T_i = shape_02*(pow(Time_T_i,(shape_02-1)));
     h_0_GK_02_T_i = shape_02*(pow(st_T_i,shape_02-1))%wk;
-    h_0_GK_02_0_LT_i = shape_02*(pow(st_0_LT_i,shape_02-1));
-    h_0_GK_02_0_LT_i = h_0_GK_02_0_LT_i.t()%rep_wk;
+
+
     if(left_trunc){
-      h_0_GK_02_T0_i = shape_02*(pow(st_T0_i,shape_02-1));
+      h_0_GK_02_T0_i = shape_02*(pow(st_T0_i,shape_02-1))%wk;
     }
   }
   if(hazard_baseline_02 == "Gompertz"){
     h_0_02_T_i = Gompertz_1_02*exp(Gompertz_2_02*Time_T_i);
     h_0_GK_02_T_i = Gompertz_1_02*exp(Gompertz_2_02*st_T_i)%wk;
     h_0_GK_02_0_LT_i = Gompertz_1_02*exp(Gompertz_2_02*st_0_LT_i);
-    h_0_GK_02_0_LT_i = h_0_GK_02_0_LT_i.t()%rep_wk;
+    arma::rowvec  h_0_GK_02_0_LT_i2 = vectorise(h_0_GK_02_0_LT_i,1);
+    h_0_GK_02_0_LT_i = h_0_GK_02_0_LT_i2%rep_wk.t();
     if(left_trunc){
       h_0_GK_02_T0_i = Gompertz_1_02*exp(st_T0_i*Gompertz_2_02)%wk;
     }
@@ -373,7 +382,7 @@ double log_IC_2var_Case3(arma::vec sharedtype, List HB, arma::vec Gompertz, arma
   if(hazard_baseline_02 == "Splines"){
     h_0_02_T_i = exp(arma::dot(gamma_02,B_T_i_02));
     h_0_GK_02_T_i = wk%exp(Bs_T_i_02*gamma_02);
-    h_0_GK_02_0_LT_i = exp(Bs_0_LT_i_02*gamma_02)%rep_wk;
+    h_0_GK_02_0_LT_i = (exp(Bs_0_LT_i_02*gamma_02)%rep_wk).t();
     if(left_trunc){
       h_0_GK_02_T0_i = wk%exp(Bs_T0_i_02*gamma_02);
     }
@@ -394,7 +403,7 @@ double log_IC_2var_Case3(arma::vec sharedtype, List HB, arma::vec Gompertz, arma
 
   etaBaseline_02_0_LT_i = exp(etaBaseline_02_0_LT_i + predsurv_02);
   survLong_02_0_LT_i = exp(survLong_02_0_LT_i);
-  survLong_02_0_LT_i = survLong_02_0_LT_i%arma::repelem(h_0_GK_02_0_LT_i.t(),S,1);
+  survLong_02_0_LT_i = survLong_02_0_LT_i%arma::repelem(h_0_GK_02_0_LT_i,S,1);
   arma::mat A_02_0_LT_i;
   A_02_0_LT_i = arma::repelem(etaBaseline_02_0_LT_i,1,nb_pointsGK*nb_pointsGK)%survLong_02_0_LT_i;
 
