@@ -900,14 +900,19 @@ DoubleVar_IDM <- function(formFixed, formRandom, formGroup, formGroupVisit, form
       binit <- c(binit,mu.log.sigma)
       names_param <- c(names_param, "mu.sigma")
     }
+    else{
+      binit <- c(binit, sigma_epsilon)
+      names_param <- c(names_param, "std_Y_inter")
+    }
     if(variability_intra_visit){
       binit <- c(binit,0.5)
       names_param <- c(names_param, "mu.epsilon")
     }
-    if(!variability_inter_visit && !variability_intra_visit){
-      binit <- c(binit, sigma_epsilon)
-      names_param <- c(names_param, "std_Y")
+    else{
+      binit <- c(0.5)
+      names_param <- c(names_param, "std_Y_intra")
     }
+
 
     if(variability_inter_visit && variability_intra_visit){
       if(correlated_re){
@@ -941,11 +946,41 @@ DoubleVar_IDM <- function(formFixed, formRandom, formGroup, formGroupVisit, form
             names_param <- c(names_param, paste("chol b ", bi, sep=""))
           }
         }
+        else{
+          binit <- c(binit,cholesky_b,
+                     0.1)
+          for(bi in 1:length(c(cholesky_b,
+                               0.1))){
+            names_param <- c(names_param, paste("chol b ", bi, sep=""))
+          }
+        }
       }
       else{
-        binit <- c(binit,cholesky_b)
-        for(bi in 1:length(c(cholesky_b))){ ### AJOUTER la matrice pour les autres effets alaeatoire et faire si correle ou non !!
-          names_param <- c(names_param, paste("chol b ", bi, sep=""))
+        if(variability_intar_visit){
+          if(correlated_re){
+            binit <- c(binit,cholesky_b,
+                       rep(0,nb.e.a),
+                       0.1)
+            for(bi in 1:length(c(cholesky_b,
+                                 rep(0,nb.e.a),
+                                 0.1))){
+              names_param <- c(names_param, paste("chol b ", bi, sep=""))
+            }
+          }
+          else{
+            binit <- c(binit,cholesky_b,
+                       0.1)
+            for(bi in 1:length(c(cholesky_b,
+                                 0.1))){
+              names_param <- c(names_param, paste("chol b ", bi, sep=""))
+            }
+          }
+        }
+        else{
+          binit <- c(binit,cholesky_b)
+          for(bi in 1:length(c(cholesky_b))){ ### AJOUTER la matrice pour les autres effets alaeatoire et faire si correle ou non !!
+            names_param <- c(names_param, paste("chol b ", bi, sep=""))
+          }
         }
       }
     }
@@ -961,7 +996,18 @@ DoubleVar_IDM <- function(formFixed, formRandom, formGroup, formGroupVisit, form
     Zq <- randtoolbox::sobol(S1,  nb.e.a+2, normal = TRUE, scrambling = 1)
   }
   else{
-    Zq <- randtoolbox::sobol(S1,  nb.e.a, normal = TRUE, scrambling = 1)
+    if(variability_inter_visit){
+      Zq <- randtoolbox::sobol(S1,  nb.e.a+1, normal = TRUE, scrambling = 1)
+    }
+    else{
+      if(variability_intra_visit){
+        Zq <- randtoolbox::sobol(S1,  nb.e.a+1, normal = TRUE, scrambling = 1)
+      }
+      else{
+        Zq <- randtoolbox::sobol(S1,  nb.e.a, normal = TRUE, scrambling = 1)
+      }
+    }
+
   }
 
 
@@ -987,7 +1033,23 @@ DoubleVar_IDM <- function(formFixed, formRandom, formGroup, formGroupVisit, form
 
 
   message("Second estimation")
-  Zq <- randtoolbox::sobol(S2,  nb.e.a+2, normal = TRUE, scrambling = 1)
+  if(variability_inter_visit && variability_intra_visit){
+    Zq <- randtoolbox::sobol(S2,  nb.e.a+2, normal = TRUE, scrambling = 1)
+  }
+  else{
+    if(variability_inter_visit){
+      Zq <- randtoolbox::sobol(S2,  nb.e.a+1, normal = TRUE, scrambling = 1)
+    }
+    else{
+      if(variability_intra_visit){
+        Zq <- randtoolbox::sobol(S2,  nb.e.a+1, normal = TRUE, scrambling = 1)
+      }
+      else{
+        Zq <- randtoolbox::sobol(S2,  nb.e.a, normal = TRUE, scrambling = 1)
+      }
+    }
+
+  }
   estimation.step2 <- marqLevAlg(estimation.step1$b, fn = log_llh_2var_IC_rcpp, minimize = FALSE,
 
                                  hazard_baseline_01 = hazard_baseline_01, sharedtype_01 = sharedtype_01,

@@ -79,7 +79,7 @@ double log_IC_2var_Case1(arma::vec sharedtype, List HB, arma::vec Gompertz, arma
   arma::vec sigma_long = sigma_inter_intra[2];
   arma::vec var_inter = sigma_inter_intra[3];
   arma::vec var_intra = sigma_inter_intra[4];
-
+  arma::vec corr_intra_inter = sigma_inter_intra[5];
   // Survival part
   ///// h
   arma::vec h_12_T_i(S,fill::ones);
@@ -112,6 +112,7 @@ double log_IC_2var_Case1(arma::vec sharedtype, List HB, arma::vec Gompertz, arma
     etaBaseline_12_T_i = etaBaseline_12_T_i + alpha_inter_12*sigma_inter;
     etaBaseline_12_0_LR_i = etaBaseline_12_0_LR_i + alpha_inter_12*sigma_inter;
   }
+
   if(dep_var_inter_02){
     etaBaseline_02_0_LR_i = etaBaseline_02_0_LR_i + alpha_inter_02*sigma_inter;
     if(left_trunc){
@@ -130,6 +131,7 @@ double log_IC_2var_Case1(arma::vec sharedtype, List HB, arma::vec Gompertz, arma
     etaBaseline_12_T_i = etaBaseline_12_T_i + alpha_intra_12*sigma_intra;
     etaBaseline_12_0_LR_i = etaBaseline_12_0_LR_i + alpha_intra_12*sigma_intra;
   }
+
   if(dep_var_intra_02){
     etaBaseline_02_0_LR_i = etaBaseline_02_0_LR_i + alpha_intra_02*sigma_intra;
     if(left_trunc){
@@ -381,7 +383,6 @@ double log_IC_2var_Case1(arma::vec sharedtype, List HB, arma::vec Gompertz, arma
   arma::mat U_base_i_id_visit;
   arma::vec y_i_id_visit;
   arma::mat CV_long;
-  arma::vec corr_intra_inter = var_intra%(2*var_inter+var_intra);
   for(int idvisit = 0; idvisit < len_visit_i; ++idvisit ){
     X_base_i_id_visit = X_base_i.row(idvisit);
     U_base_i_id_visit = U_base_i.row(idvisit);
@@ -393,12 +394,34 @@ double log_IC_2var_Case1(arma::vec sharedtype, List HB, arma::vec Gompertz, arma
     }
     else{
       if(n_ij == 2){
+        Rcout << "The value of v : \n" << 5 << "\n";
         f_Y_b_sigma = f_Y_b_sigma + log(1/((pow(2*M_PI,n_ij/2))*sqrt(corr_intra_inter))) -
           (1/(2*corr_intra_inter))%((pow((y_i_id_visit(0)-CV_long),2)%sigma_long)-2*(var_inter%(y_i_id_visit(0)-CV_long)%(y_i_id_visit(1)-CV_long)) + (pow(y_i_id_visit(1)-CV_long,2)%(sigma_long)));
       }
+      else{
+        if(n_ij == 3){
+          f_Y_b_sigma = f_Y_b_sigma + log(1/((pow(2*M_PI,n_ij/2.0))*var_intra%sqrt((3*var_inter+var_intra)))) -
+            (1/(2*pow(var_intra,2)%(var_intra+3*var_inter)))%((corr_intra_inter%(pow(y_i_id_visit(0)-CV_long,2) + pow(y_i_id_visit(1)-CV_long,2) + pow(y_i_id_visit(2)-CV_long,2)))-
+            2*var_inter%var_intra%((y_i_id_visit(0)-CV_long)%(y_i_id_visit(1)-CV_long) + (y_i_id_visit(0)-CV_long)%(y_i_id_visit(2)-CV_long) + (y_i_id_visit(1)-CV_long)%(y_i_id_visit(2)-CV_long)));
+        }
+        else{
+          arma::vec somme1(S,fill::zeros);
+          arma::vec somme2(S,fill::zeros);
+          for(int k_somme = 0; k_somme < n_ij; ++k_somme){
+            somme1 = somme1 + pow(y_i_id_visit(k_somme)-CV_long,2);
+            if(k_somme != n_ij){
+              for(int l_somme = k_somme+1; l_somme < n_ij; ++l_somme){
+                somme2 = somme2 + (y_i_id_visit(k_somme)-CV_long)%(y_i_id_visit(l_somme)-CV_long);
+              }
+            }
+          }
+          f_Y_b_sigma = f_Y_b_sigma + log(1/((pow(2*M_PI,n_ij/2.0))*sqrt(pow(var_intra,(n_ij-1))%(var_intra+n_ij*var_inter)))) -
+            (1/(2*pow(var_intra,(n_ij-1))%(var_intra+n_ij*var_inter)))%(pow(var_intra,(n_ij-2))%(var_intra+(n_ij-1)*var_inter)%somme1 -
+            2*var_inter%pow(var_intra,(n_ij-2))%somme2);
+        }
+      }
     }
 
-    // COMPLETER AVEC LES AUTRES CAS (n_ij > 3) et variability intra et inter ou non
 
   }
 
