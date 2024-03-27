@@ -17,3 +17,7 @@ log_IC_2var_Case3 <- function(sharedtype, HB, Gompertz, Weibull, nb_points_integ
     .Call(`_DoubleVar_log_IC_2var_Case3`, sharedtype, HB, Gompertz, Weibull, nb_points_integral, alpha_inter_intra, alpha_y_slope, alpha_z, gamma_B, beta, beta_slope, b_y, b_y_slope, wk, rep_wk, sigma_inter_intra, delta2_i, Z_01_i, Z_02_i, Z_12_i, X_T_i, U_T_i, Xslope_T_i, Uslope_T_i, X_GK_T_i, U_GK_T_i, Xslope_GK_T_i, Uslope_GK_T_i, X_GK_L_T_i, U_GK_L_T_i, Xslope_GK_L_T_i, Uslope_GK_L_T_i, X_GK_0_LT_i, U_GK_0_LT_i, Xslope_GK_0_LT_i, Uslope_GK_0_LT_i, X_GK_T0_i, U_GK_T0_i, Xslope_GK_T0_i, Uslope_GK_T0_i, Time_T_i, Time_L_T_i, Time_T0_i, st_T_i, st_0_LT_i, st_L_T_i, st_T0_i, ck, B_T_i_02, B_T_i_12, Bs_T_i_01, Bs_T_i_02, Bs_T_i_12, Bs_0_LT_i_01, Bs_0_LT_i_02, Bs_0_LT_i_12, Bs_L_T_i_01, Bs_T0_i_01, Bs_T0_i_02, left_trunc, len_visit_i, X_base_i, U_base_i, y_i, offset_ID_i)
 }
 
+log_llh_2var_longInd <- function(S, sigma_inter_intra, X_base_i, U_base_i, y_i, len_visit_i, offset_ID_i, beta, b_y) {
+    .Call(`_DoubleVar_log_llh_2var_longInd`, S, sigma_inter_intra, X_base_i, U_base_i, y_i, len_visit_i, offset_ID_i, beta, b_y)
+}
+

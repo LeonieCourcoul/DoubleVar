@@ -282,12 +282,32 @@ BEGIN_RCPP
     return rcpp_result_gen;
 END_RCPP
 }
+// log_llh_2var_longInd
+double log_llh_2var_longInd(int S, List sigma_inter_intra, arma::mat X_base_i, arma::mat U_base_i, arma::vec y_i, int len_visit_i, arma::vec offset_ID_i, arma::vec beta, arma::mat b_y);
+RcppExport SEXP _DoubleVar_log_llh_2var_longInd(SEXP SSEXP, SEXP sigma_inter_intraSEXP, SEXP X_base_iSEXP, SEXP U_base_iSEXP, SEXP y_iSEXP, SEXP len_visit_iSEXP, SEXP offset_ID_iSEXP, SEXP betaSEXP, SEXP b_ySEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< int >::type S(SSEXP);
+    Rcpp::traits::input_parameter< List >::type sigma_inter_intra(sigma_inter_intraSEXP);
+    Rcpp::traits::input_parameter< arma::mat >::type X_base_i(X_base_iSEXP);
+    Rcpp::traits::input_parameter< arma::mat >::type U_base_i(U_base_iSEXP);
+    Rcpp::traits::input_parameter< arma::vec >::type y_i(y_iSEXP);
+    Rcpp::traits::input_parameter< int >::type len_visit_i(len_visit_iSEXP);
+    Rcpp::traits::input_parameter< arma::vec >::type offset_ID_i(offset_ID_iSEXP);
+    Rcpp::traits::input_parameter< arma::vec >::type beta(betaSEXP);
+    Rcpp::traits::input_parameter< arma::mat >::type b_y(b_ySEXP);
+    rcpp_result_gen = Rcpp::wrap(log_llh_2var_longInd(S, sigma_inter_intra, X_base_i, U_base_i, y_i, len_visit_i, offset_ID_i, beta, b_y));
+    return rcpp_result_gen;
+END_RCPP
+}
 
 static const R_CallMethodDef CallEntries[] = {
     {"_DoubleVar_log_IC_2var_Case1", (DL_FUNC) &_DoubleVar_log_IC_2var_Case1, 62},
     {"_DoubleVar_log_IC_2var_Case1bis", (DL_FUNC) &_DoubleVar_log_IC_2var_Case1bis, 59},
     {"_DoubleVar_log_IC_2var_Case2", (DL_FUNC) &_DoubleVar_log_IC_2var_Case2, 45},
     {"_DoubleVar_log_IC_2var_Case3", (DL_FUNC) &_DoubleVar_log_IC_2var_Case3, 65},
+    {"_DoubleVar_log_llh_2var_longInd", (DL_FUNC) &_DoubleVar_log_llh_2var_longInd, 9},
     {NULL, NULL, 0}
 };
 

@@ -394,7 +394,6 @@ double log_IC_2var_Case1(arma::vec sharedtype, List HB, arma::vec Gompertz, arma
     }
     else{
       if(n_ij == 2){
-        Rcout << "The value of v : \n" << 5 << "\n";
         f_Y_b_sigma = f_Y_b_sigma + log(1/((pow(2*M_PI,n_ij/2))*sqrt(corr_intra_inter))) -
           (1/(2*corr_intra_inter))%((pow((y_i_id_visit(0)-CV_long),2)%sigma_long)-2*(var_inter%(y_i_id_visit(0)-CV_long)%(y_i_id_visit(1)-CV_long)) + (pow(y_i_id_visit(1)-CV_long,2)%(sigma_long)));
       }

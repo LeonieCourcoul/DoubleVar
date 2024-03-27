@@ -41,7 +41,7 @@ DoubleVar_IDM <- function(formFixed, formRandom, formGroup, formGroupVisit, form
                           variability_inter_visit, variability_intra_visit,
                           sharedtype, hazard_baseline, nb.knots.splines, nb_pointsGK = 15,
                           formSlopeFixed = NULL, formSlopeRandom = NULL, index_beta_slope = NULL,
-                          S1 = 500, S2= 5000,
+                          S1 = 500, S2= 5000, S3 = NULL,
                           nproc = 1, clustertype = "SOCK", maxiter = 100, print.info = FALSE,
                           file = "", epsa = 1e-04, epsb = 1e-04, epsd = 1e-04, binit = NULL, partialH = NULL){
 
@@ -62,6 +62,9 @@ DoubleVar_IDM <- function(formFixed, formRandom, formGroup, formGroupVisit, form
   data.long$Time_R <- data.long[all.vars(Time_R)][,1]
   Time_L <- Time[["Time_L"]]
   data.long$Time_L <- data.long[all.vars(Time_L)][,1]
+  control <- list(formFixed = formFixed, formRandom = formRandom, formSlopeFixed = formSlopeFixed, formSLopeRandom = formSlopeRandom, timeVar = timeVar)
+  estimation.step1.Long <- NULL
+  estimation.step1.noCI <- NULL
   if(!is.null(Time[["Time_T0"]])){
     left_trunc <- TRUE
     Time_T0 <- Time[["Time_T0"]]
@@ -101,18 +104,111 @@ DoubleVar_IDM <- function(formFixed, formRandom, formGroup, formGroupVisit, form
   y.new_glob <- list.long$y.new
   data.long <- as.data.frame(data.long)
   data.long$y.new <-  y.new_glob
-  data.long <- data.long %>% group_by(id) %>% dplyr::mutate(sd.emp = sd(y.new),
-                                                            VC.emp = mean(y.new))%>% ungroup()
+  #data.long <- data.long %>% group_by(id) %>% dplyr::mutate(sd.emp = sd(y.new),
+  #                                                          VC.emp = mean(y.new))%>% ungroup()
   data.long <- as.data.frame(data.long)
   data.long.court <- data.long[!duplicated(data.long[,c("id",all.vars(formGroupVisit))]),]
 
-    list.init.long <- initial.long(formFixed, formRandom, idVar, data.long.court,
-                                   ncol(list.long$X), nproc = 1)
-    sigma_epsilon <- list.init.long$sigma
-    mu.log.sigma <- log(sigma_epsilon)
-    tau.log.sigma <- 0.01
-    cholesky_b <- list.init.long$long_model$cholesky
-    priorMean.beta <- list.init.long$priorMean.beta
+
+
+
+    if(is.null(binit)){
+      #Initialisation via Mixed-effects model
+      list.init.long <- initial.long(formFixed, formRandom, idVar, data.long.court,
+                                     ncol(list.long$X), nproc = 1)
+      sigma_epsilon <- list.init.long$sigma
+      mu.log.sigma <- log(sigma_epsilon)
+      tau.log.sigma <- 0.01
+      cholesky_b <- list.init.long$long_model$cholesky
+      priorMean.beta <- list.init.long$priorMean.beta
+      #Initialisation via location-scale model - S1
+      X_base <- list.long$X; U_base <- list.long$U
+      y.new <- list.long$y.new
+      ID.visit <- data.long[all.vars(formGroupVisit)][,1]; offset <- list.long$offset
+      nb.e.a <- ncol(U_base)
+      nb.beta = length(priorMean.beta)
+      binit_long = c(priorMean.beta, mu.log.sigma/2,mu.log.sigma/2)
+      if(variability_inter_visit && variability_intra_visit){
+        if(correlated_re){
+          C1 <- matrix(rep(0,(nb.e.a)**2),nrow=nb.e.a,ncol=nb.e.a)
+          C1[lower.tri(C1, diag=T)] <- cholesky_b
+          C2 <- matrix(c(0.1, 0,0, 0.1),nrow=2,ncol=2, byrow = TRUE)
+          C3 <- matrix(rep(0,2*nb.e.a), ncol = nb.e.a)
+          C4 <- matrix(rep(0,2*nb.e.a), nrow = nb.e.a)
+          Cholesky <- rbind(cbind(C1,C4),cbind(C3,C2))
+          binit_long <- c(binit_long,Cholesky[lower.tri(Cholesky, diag = T)])
+        }
+        else{
+          binit_long <- c(binit_long,cholesky_b,
+                     0.1,0.05,0.1)
+        }
+      }
+      else{
+        if(variability_inter_visit){
+          if(correlated_re){
+            C1 <- matrix(rep(0,(nb.e.a)**2),nrow=nb.e.a,ncol=nb.e.a)
+            C1[lower.tri(C1, diag=T)] <- cholesky_b
+            C2 <- matrix(c(0.1),nrow=1,ncol=1, byrow = TRUE)
+            C3 <- matrix(rep(0,nb.e.a), ncol = nb.e.a)
+            C4 <- matrix(rep(0,nb.e.a), nrow = nb.e.a)
+            Cholesky <- rbind(cbind(C1,C4),cbind(C3,C2))
+            binit_long <- c(binit_long,Cholesky[lower.tri(Cholesky, diag = T)])
+          }
+          else{
+            binit_long <- c(binit_long,cholesky_b,
+                            0.1)
+          }
+        }
+        else{
+          if(variability_intra_visit){
+            if(correlated_re){
+              C1 <- matrix(rep(0,(nb.e.a)**2),nrow=nb.e.a,ncol=nb.e.a)
+              C1[lower.tri(C1, diag=T)] <- cholesky_b
+              C2 <- matrix(c(0.1),nrow=1,ncol=1, byrow = TRUE)
+              C3 <- matrix(rep(0,nb.e.a), ncol = nb.e.a)
+              C4 <- matrix(rep(0,nb.e.a), nrow = nb.e.a)
+              Cholesky <- rbind(cbind(C1,C4),cbind(C3,C2))
+              binit_long <- c(binit_long,Cholesky[lower.tri(Cholesky, diag = T)])
+            }
+            else{
+              binit_long <- c(binit_long,cholesky_b,
+                              0.1)
+            }
+          }
+          else{
+            binit_long <- c(binit_long,cholesky_b)
+          }
+        }
+      }
+      if(variability_inter_visit && variability_intra_visit){
+        Zq <- randtoolbox::sobol(S1,  nb.e.a+2, normal = TRUE, scrambling = 1)
+      }
+      else{
+        if(variability_inter_visit){
+          Zq <- randtoolbox::sobol(S1,  nb.e.a+1, normal = TRUE, scrambling = 1)
+        }
+        else{
+          if(variability_intra_visit){
+            Zq <- randtoolbox::sobol(S1,  nb.e.a+1, normal = TRUE, scrambling = 1)
+          }
+          else{
+            Zq <- randtoolbox::sobol(S1,  nb.e.a, normal = TRUE, scrambling = 1)
+          }
+        }
+
+      }
+      estimation.step1.Long <- marqLevAlg(binit_long, fn = log_llh_2var_long, minimize = FALSE,
+                                     nb.beta = nb.beta, Zq=Zq,
+                                     nb.e.a = nb.e.a, S = S1,
+                                     variability_inter_visit = variability_inter_visit, variability_intra_visit = variability_intra_visit,
+                                     correlated_re = correlated_re, X_base = X_base, U_base = U_base, y.new = y.new, ID.visit = ID.visit,
+                                     Ind = length(unique(data.long$id)), offset = offset,
+                                     nproc = nproc, clustertype = clustertype, maxiter = maxiter, print.info = print.info,
+                                     file = file, blinding = FALSE, epsa = epsa, epsb = epsb, epsd = 1.1)
+
+
+    }
+
 
   ### Initialisation survie
   message("Survival initialisation")
@@ -121,24 +217,25 @@ DoubleVar_IDM <- function(formFixed, formRandom, formGroup, formGroupVisit, form
   data.id$Time_R[which(data.id$Time_R == 0)] <- 0.00000000000000001
   data.id$Time_L[which(data.id$Time_L == 0)] <- 0.00000000000000001
   data.id$Time_T[which(data.id$Time_T == 0)] <- 0.00000000000000001
-  if(length(all.vars(formSurv_01))==0){
-    Surv_01 <- Surv(Time_R, delta1) ~ 1
-  }
-  else{
-    Surv_01 <- as.formula(paste("Surv(Time_R,delta1) ~ ", paste(all.vars(formSurv_01), collapse="+")))
-  }
-  if(length(all.vars(formSurv_02))==0){
-    Surv_02 <- Surv(Time_T, delta2) ~ 1
-  }
-  else{
-    Surv_02 <- as.formula(paste("Surv(Time_T,delta2) ~ ", paste(all.vars(formSurv_02), collapse="+")))
-  }
-  if(length(all.vars(formSurv_12))==0){
-    Surv_12 <- Surv(Time_T, delta2) ~ 1
-  }
-  else{
-    Surv_12 <- as.formula(paste("Surv(Time_T,delta2) ~ ", paste(all.vars(formSurv_12), collapse="+")))
-  }
+  if(is.null(binit)){
+    if(length(all.vars(formSurv_01))==0){
+      Surv_01 <- Surv(Time_R, delta1) ~ 1
+    }
+    else{
+      Surv_01 <- as.formula(paste("Surv(Time_R,delta1) ~ ", paste(all.vars(formSurv_01), collapse="+")))
+    }
+    if(length(all.vars(formSurv_02))==0){
+      Surv_02 <- Surv(Time_T, delta2) ~ 1
+    }
+    else{
+      Surv_02 <- as.formula(paste("Surv(Time_T,delta2) ~ ", paste(all.vars(formSurv_02), collapse="+")))
+    }
+    if(length(all.vars(formSurv_12))==0){
+      Surv_12 <- Surv(Time_T, delta2) ~ 1
+    }
+    else{
+      Surv_12 <- as.formula(paste("Surv(Time_T,delta2) ~ ", paste(all.vars(formSurv_12), collapse="+")))
+    }
 
     if(hazard_baseline_01 == "Exponential" || hazard_baseline_01 == "Weibull" ){
       mod_surv <- survreg(Surv_01, data = data.id, dist = "exponential")
@@ -269,7 +366,345 @@ DoubleVar_IDM <- function(formFixed, formRandom, formGroup, formGroupVisit, form
       }
     }
 
+    binit_noCI <- c()
+    #01
+    if(hazard_baseline_01 == "Weibull"){
+      binit_noCI <- c(binit_noCI, shape_01)
+    }
+    else{
+      if(hazard_baseline_01 == "Gompertz"){
+        binit_noCI <- c(binit_noCI, gompertz.1_01, gompertz.2_01)
+      }
+      else{
+        if(hazard_baseline_01 == "Splines"){
+          binit_noCI <- c(binit_noCI,opt_splines_01$par)
+        }
 
+      }
+    }
+    binit_noCI <- c(binit_noCI, alpha_01)
+    if("current value" %in% sharedtype_01){
+      binit_noCI <- c(binit_noCI, 0)
+    }
+    if("slope" %in% sharedtype_01){
+      binit_noCI <- c(binit_noCI, 0)
+    }
+    if("inter visit variability" %in% sharedtype_01){
+      binit_noCI <- c(binit_noCI,0)
+    }
+    if("intra visit variability" %in% sharedtype_01){
+      binit_noCI <- c(binit_noCI,0)
+    }
+
+    # 02
+    if(hazard_baseline_02 == "Weibull"){
+      binit_noCI <- c(binit_noCI, shape_02)
+    }
+    else{
+      if(hazard_baseline_02 == "Gompertz"){
+        binit_noCI <- c(binit_noCI, gompertz.1_02, gompertz.2_02)
+      }
+      else{
+        if(hazard_baseline_02 == "Splines"){
+          binit_noCI <- c(binit_noCI,opt_splines_02$par)
+        }
+
+      }
+    }
+    binit_noCI <- c(binit_noCI, alpha_02)
+    if("current value" %in% sharedtype_02){
+      binit_noCI <- c(binit_noCI, 0)
+    }
+    if("slope" %in% sharedtype_02){
+      binit_noCI <- c(binit_noCI, 0)
+    }
+    if("inter visit variability" %in% sharedtype_02){
+      binit_noCI <- c(binit_noCI,0)
+    }
+    if("intra visit variability" %in% sharedtype_02){
+      binit_noCI <- c(binit_noCI,0)
+    }
+
+    # 12
+    if(hazard_baseline_12 == "Weibull"){
+      binit_noCI <- c(binit_noCI, shape_12)
+    }
+    else{
+      if(hazard_baseline_12 == "Gompertz"){
+        binit_noCI <- c(binit_noCI, gompertz.1_12, gompertz.2_12)
+      }
+      else{
+        if(hazard_baseline_12 == "Splines"){
+          binit_noCI <- c(binit_noCI,opt_splines_12$par)
+        }
+
+      }
+    }
+    binit_noCI <- c(binit_noCI, alpha_12)
+    if("current value" %in% sharedtype_12){
+      binit_noCI <- c(binit_noCI, 0)
+    }
+    if("slope" %in% sharedtype_12){
+      binit_noCI <- c(binit_noCI, 0)
+    }
+    if("inter visit variability" %in% sharedtype_12){
+      binit_noCI <- c(binit_noCI,0)
+    }
+    if("intra visit variability" %in% sharedtype_12){
+      binit_noCI <- c(binit_noCI,0)
+    }
+
+    binit_noCI <- c(binit_noCI, estimation.step1.Long$b)
+
+
+
+
+    if((nbCase1 + nbCase3)/(nbCase1 + nbCase1bis + nbCase2 + nbCase3) > 0.10){ #nombre de cas 1 et 3 supérieur à 10% => seuil à discuter
+      data.long_noCI <- data.long
+      data.long_noCI$Time_L_initnoCI <- NA
+      data.long_noCI$Time_R_initnoCI <- NA
+      #Initialisation avec un modèle sans CI
+      ## On calcule le temps du milieu d'intervalle pour les personnes devenues démentes et on prends le temps de décès ou de censure pour les autres
+      data.long_noCI$Time_L_initnoCI[which(data.long_noCI$delta1 == 1)] <- (data.long_noCI$Time_L[which(data.long_noCI$delta1 == 1)] + data.long_noCI$Time_R[which(data.long_noCI$delta1 == 1)])/2
+      data.long_noCI$Time_R_initnoCI[which(data.long_noCI$delta1 == 1)] <- (data.long_noCI$Time_L[which(data.long_noCI$delta1 == 1)] + data.long_noCI$Time_R[which(data.long_noCI$delta1 == 1)])/2
+      data.long_noCI$Time_L_initnoCI[which(data.long_noCI$delta1 == 0)] <- data.long_noCI$Time_T[which(data.long_noCI$delta1 == 0)]
+      data.long_noCI$Time_R_initnoCI[which(data.long_noCI$delta1 == 0)] <- data.long_noCI$Time_T[which(data.long_noCI$delta1 == 0)]
+      #On créer les nouveaux sous-groupe pour l'initialisation sans CI
+      data.long_noCI$Case <- ifelse(data.long_noCI$delta1 == 1 & data.long_noCI$Time_R_initnoCI == data.long_noCI$Time_L_initnoCI, "Case1bis",
+                               ifelse(data.long_noCI$delta1 == 1, "Case1",
+                                      ifelse(data.long_noCI$Time_L_initnoCI == data.long_noCI$Time_T, "Case2", "Case3")))
+      id.Case1_noCI <- unique(data.long_noCI$id[which(data.long_noCI$Case == "Case1")])
+      id.Case1bis_noCI <- unique(data.long_noCI$id[which(data.long_noCI$Case == "Case1bis")])
+      id.Case2_noCI <- unique(data.long_noCI$id[which(data.long_noCI$Case == "Case2")])
+      id.Case3_noCI <- unique(data.long_noCI$id[which(data.long_noCI$Case == "Case3")])
+      nbCase1_noCI <- length(id.Case1_noCI); nbCase1bis_noCI <- length(id.Case1bis_noCI); nbCase2_noCI <- length(id.Case2_noCI); nbCase3_noCI <- length(id.Case3_noCI)
+       if(nbCase1_noCI + nbCase3_noCI!=0){
+        stop("Something is wrong.")
+      }
+      #On crée les paramètres nécessaires
+     # browser()
+      Case1bis <- NULL
+      st_T = NULL; X_GK_T = NULL; U_GK_T = NULL; Xslope_GK_T = NULL; Uslope_GK_T = NULL;
+      X_T = NULL; U_T = NULL; Xslope_T = NULL; Uslope_T = NULL; B_T_01 = NULL; B_T_02 = NULL; B_T_12 = NULL;
+      Bs_T_01 = NULL; Bs_T_02 = NULL; Bs_T_12 = NULL; X_GK_L = NULL; U_GK_L = NULL;
+      Xslope_GK_L = NULL; Uslope_GK_L = NULL;
+      st_L = NULL; Bs_L_01 = NULL; Bs_L_02 = NULL; Bs_L_12 = NULL; B_L_01 = NULL; B_L_02 = NULL; B_L_12 = NULL;
+      X_L = NULL; U_L = NULL; Xslope_L = NULL; Uslope_L = NULL; Time_T0 = NULL
+      st_T0 = NULL; X_GK_T0 = NULL; U_GK_T0 = NULL; Xslope_GK_T0 = NULL; Uslope_GK_T0 = NULL;
+      Bs_T0_01 = NULL; Bs_T0_02 = NULL
+      if(length(id.Case1bis_noCI)>0){
+        data.long.Case1bis <- data.long_noCI[which(data.long_noCI$id %in% id.Case1bis_noCI),]
+        data.id.Case1bis <- data.long.Case1bis[!duplicated(data.long.Case1bis$id),]
+        list.long.Case1bis <- data.manag.long(formGroup,formFixed, formRandom,data.long.Case1bis)
+        X_base <- list.long.Case1bis$X; U_base <- list.long.Case1bis$U; y.new <- list.long.Case1bis$y.new
+        ID.visit <- data.long.Case1bis[all.vars(formGroupVisit)][,1]; offset <- list.long.Case1bis$offset
+
+        list.GK_T <- data.GaussKronrod(data.id.Case1bis, a = 0, b = data.id.Case1bis$Time_T, k = nb_pointsGK)
+        list.GK_L <- data.GaussKronrod(data.id.Case1bis, a = 0, b = data.id.Case1bis$Time_L_initnoCI, k = nb_pointsGK)
+        st_T <- list.GK_T$st
+        st_L <- list.GK_L$st
+        if(left_trunc){
+          list.GK_T0 <- data.GaussKronrod(data.id.Case1bis, a = 0, b = data.id.Case1bis$Time_T0, k = nb_pointsGK)
+          st_T0 <- list.GK_T0$st
+        }
+        if(("current value" %in% sharedtype_01) || ("current value" %in% sharedtype_02) || ("current value" %in% sharedtype_12)){
+          list.data_T <- data.time(data.id.Case1bis, data.id.Case1bis$Time_T, formFixed, formRandom,timeVar)
+          list.data_L <- data.time(data.id.Case1bis, data.id.Case1bis$Time_L_initnoCI, formFixed, formRandom,timeVar)
+          list.data.GK_T <- data.time(list.GK_T$data.id2, c(t(st_T)),formFixed, formRandom,timeVar)
+          list.data.GK_L <- data.time(list.GK_L$data.id2, c(t(st_L)),formFixed, formRandom,timeVar)
+          X_T <- list.data_T$Xtime; U_T <- list.data_T$Utime
+          X_L <- list.data_L$Xtime; U_L <- list.data_L$Utime
+          X_GK_T <- list.data.GK_T$Xtime; U_GK_T <- list.data.GK_T$Utime
+          X_GK_L <- list.data.GK_L$Xtime; U_GK_L <- list.data.GK_L$Utime
+
+          if(left_trunc){
+            list.data.GK_T0 <- data.time(list.GK_T0$data.id2, c(t(st_T0)),
+                                         formFixed, formRandom,timeVar)
+            X_GK_T0 <- list.data.GK_T0$Xtime
+            U_GK_T0 <- list.data.GK_T0$Utime
+          }
+        }
+
+        if(("slope" %in% sharedtype_01) || ("slope" %in% sharedtype_02) || ("slope" %in% sharedtype_12)){
+          list.data_T <- data.time(data.id.Case1bis, data.id.Case1bis$Time_T, formSlopeFixed, formSlopeRandom, timeVar)
+          list.data_L <- data.time(data.id.Case1bis, data.id.Case1bis$Time_L_initnoCI, formSlopeFixed, formSlopeRandom, timeVar)
+          list.data.GK_T <- data.time(list.GK_T$data.id2, c(t(st_T)), formSlopeFixed, formSlopeRandom, timeVar)
+          list.data.GK_L <- data.time(list.GK_L$data.id2, c(t(st_L)), formSlopeFixed, formSlopeRandom, timeVar)
+          Xslope_T <- list.data_T$Xtime; Uslope_T <- list.data_T$Utime
+          Xslope_L <- list.data_L$Xtime; Uslope_L <- list.data_L$Utime
+          Xslope_GK_T <- list.data.GK_T$Xtime; Uslope_GK_T <- list.data.GK_T$Utime
+          Xslope_GK_L <- list.data.GK_L$Xtime; Uslope_GK_L <- list.data.GK_L$Utime
+
+          if(left_trunc){
+            list.data.GK_T0 <- data.time(list.GK_T0$data.id2, c(t(st_T0)),
+                                         formSlopeFixed, formSlopeRandom,timeVar)
+            Xslope_GK_T0 <- list.data.GK_T0$Xtime
+            Uslope_GK_T0 <- list.data.GK_T0$Utime
+          }
+        }
+
+        list.surv <- data.manag.surv(formGroup, formSurv_01, data.long.Case1bis)
+        Z_01 <- list.surv$Z
+        if(hazard_baseline_01 == "Gompertz"){Z_01 <- Z_01[,-1]}
+        list.surv <- data.manag.surv(formGroup, formSurv_02, data.long.Case1bis)
+        Z_02 <- list.surv$Z
+        if(hazard_baseline_02 == "Gompertz"){Z_02 <- Z_02[,-1]}
+        list.surv <- data.manag.surv(formGroup, formSurv_12, data.long.Case1bis)
+        Z_12 <- list.surv$Z
+        if(hazard_baseline_12 == "Gompertz"){Z_12 <- Z_12[,-1]}
+        if(hazard_baseline_01 == "Splines"){
+          Z_01 <- Z_01[,-1]
+          B_T_01 <- splineDesign(knots_01, data.id.Case1bis$Time_T, ord = 4L)
+          B_L_01 <- splineDesign(knots_01, data.id.Case1bis$Time_L_initnoCI, ord = 4L)
+          Bs_T_01 <- splineDesign(knots_01, c(t(st_T)), ord = 4L)
+          Bs_L_01 <- splineDesign(knots_01, c(t(st_L)), ord = 4L)
+          if(left_trunc){
+            Bs_T0_01 <- splineDesign(knots_01, c(t(st_T0)), ord = 4L)
+          }
+        }
+        if(hazard_baseline_02 == "Splines"){
+          Z_02 <- Z_02[,-1]
+          B_T_02 <- splineDesign(knots_02, data.id.Case1bis$Time_T, ord = 4L)
+          B_L_02 <- splineDesign(knots_02, data.id.Case1bis$Time_L_initnoCI, ord = 4L)
+          Bs_T_02 <- splineDesign(knots_02, c(t(st_T)), ord = 4L)
+          Bs_L_02 <- splineDesign(knots_02, c(t(st_L)), ord = 4L)
+          if(left_trunc){
+            Bs_T0_02 <- splineDesign(knots_02, c(t(st_T0)), ord = 4L)
+          }
+        }
+        if(hazard_baseline_12 == "Splines"){
+          Z_12 <- Z_12[,-1]
+          B_T_12 <- splineDesign(knots_12, data.id.Case1bis$Time_T, ord = 4L)
+          B_L_12 <- splineDesign(knots_12, data.id.Case1bis$Time_L_initnoCI, ord = 4L)
+          Bs_T_12 <- splineDesign(knots_12, c(t(st_T)), ord = 4L)
+          Bs_L_12 <- splineDesign(knots_12, c(t(st_L)), ord = 4L)
+        }
+
+        Case1bis <- list( "delta2" = data.id.Case1bis$delta2, "Z_01" = Z_01, "Z_02" = Z_02, "Z_12" = Z_12, "Time_T" = data.id.Case1bis$Time_T,
+                          "st_T" = st_T, "X_GK_T" = X_GK_T, "U_GK_T" = U_GK_T, "Xslope_GK_T" = Xslope_GK_T, "Uslope_GK_T" = Uslope_GK_T,
+                          "X_T" = X_T, "U_T" = U_T, "Xslope_T" = Xslope_T, "Uslope_T" = Uslope_T, "X_base" = X_base, "U_base" = U_base,
+                          "y.new" = y.new, "ID.visit" = ID.visit, "offset" = offset, "B_T_01" = B_T_01, "B_T_02" = B_T_02, "B_T_12" = B_T_12,
+                          "Bs_T_01" = "Bs_T_01", "Bs_T_02" = Bs_T_02, "Bs_T_12" = Bs_T_12, "X_GK_L" = X_GK_L, "U_GK_L" = U_GK_L,
+                          "Xslope_GK_L" = Xslope_GK_L, "Uslope_GK_L" = Uslope_GK_L, "Time_L" = data.id.Case1bis$Time_L,
+                          "st_L" = st_L, "Bs_L_01" = Bs_L_01, "Bs_L_02" = Bs_L_02, "Bs_L_12" = Bs_L_12, "B_L_01" = B_L_01, "B_L_02" = B_L_02, "B_L_12" = B_L_12,
+                          "X_L" = X_L, "U_L" = U_L, "Xslope_L" = Xslope_L, "Uslope_L" = Uslope_L, "Time_T0" = data.id.Case1bis$Time_T0,
+                          "st_T0" = st_T0, "X_GK_T0" = X_GK_T0, "U_GK_T0" = U_GK_T0, "Xslope_GK_T0" = Xslope_GK_T0, "Uslope_GK_T0" = Uslope_GK_T0,
+                          "Bs_T0_01" = Bs_T0_01, "Bs_T0_02" = Bs_T0_02
+        )
+
+      }
+      Case2 <- NULL
+      st_T = NULL; X_GK_T = NULL; U_GK_T = NULL; Xslope_GK_T = NULL; Uslope_GK_T = NULL;
+      X_T = NULL; U_T = NULL; Xslope_T = NULL; Uslope_T = NULL;
+      B_T_01 = NULL; B_T_02 = NULL;
+      Bs_T_01 = NULL; Bs_T_02 = NULL; Time_T0 = NULL;
+      st_T0 = NULL; X_GK_T0 = NULL; U_GK_T0 = NULL; Xslope_GK_T0 = NULL; Uslope_GK_T0 = NULL;
+      Bs_T0_01 = NULL; Bs_T0_02 = NULL
+      if(length(id.Case2_noCI)>0){
+        data.long.Case2 <- data.long_noCI[which(data.long_noCI$id %in% id.Case2_noCI),]
+        data.id.Case2 <- data.long.Case2[!duplicated(data.long.Case2$id),]
+        list.long.Case2 <- data.manag.long(formGroup,formFixed, formRandom,data.long.Case2)
+        X_base <- list.long.Case2$X; U_base <- list.long.Case2$U; y.new <- list.long.Case2$y.new
+        ID.visit <- data.long.Case2[all.vars(formGroupVisit)][,1]; offset <- list.long.Case2$offset
+
+        list.GK_T <- data.GaussKronrod(data.id.Case2, a = 0, b = data.id.Case2$Time_T, k = nb_pointsGK)
+        st_T <- list.GK_T$st
+        if(left_trunc){
+          list.GK_T0 <- data.GaussKronrod(data.id.Case2, a = 0, b = data.id.Case2$Time_T0, k = nb_pointsGK)
+          st_T0 <- list.GK_T0$st
+        }
+        if(("current value" %in% sharedtype_01) || ("current value" %in% sharedtype_02) ){
+          list.data_T <- data.time(data.id.Case2, data.id.Case2$Time_T, formFixed, formRandom,timeVar)
+          list.data.GK_T <- data.time(list.GK_T$data.id2, c(t(st_T)),formFixed, formRandom,timeVar)
+          X_T <- list.data_T$Xtime; U_T <- list.data_T$Utime
+          X_GK_T <- list.data.GK_T$Xtime; U_GK_T <- list.data.GK_T$Utime
+
+          if(left_trunc){
+            list.data.GK_T0 <- data.time(list.GK_T0$data.id2, c(t(st_T0)),
+                                         formFixed, formRandom,timeVar)
+            X_GK_T0 <- list.data.GK_T0$Xtime
+            U_GK_T0 <- list.data.GK_T0$Utime
+          }
+        }
+
+        if(("slope" %in% sharedtype_01) || ("slope" %in% sharedtype_02) ){
+          list.data_T <- data.time(data.id.Case2, data.id.Case2$Time_T, formSlopeFixed, formSlopeRandom, timeVar)
+          list.data.GK_T <- data.time(list.GK_T$data.id2, c(t(st_T)), formSlopeFixed, formSlopeRandom, timeVar)
+          Xslope_T <- list.data_T$Xtime; Uslope_T <- list.data_T$Utime
+          Xslope_GK_T <- list.data.GK_T$Xtime; Uslope_GK_T <- list.data.GK_T$Utime
+
+          if(left_trunc){
+            list.data.GK_T0 <- data.time(list.GK_T0$data.id2, c(t(st_T0)),
+                                         formSlopeFixed, formSlopeRandom,timeVar)
+            Xslope_GK_T0 <- list.data.GK_T0$Xtime
+            Uslope_GK_T0 <- list.data.GK_T0$Utime
+          }
+        }
+
+        list.surv <- data.manag.surv(formGroup, formSurv_01, data.long.Case2)
+        Z_01 <- list.surv$Z
+        if(hazard_baseline_01 == "Gompertz"){Z_01 <- Z_01[,-1]}
+        list.surv <- data.manag.surv(formGroup, formSurv_02, data.long.Case2)
+        Z_02 <- list.surv$Z
+        if(hazard_baseline_02 == "Gompertz"){Z_02 <- Z_02[,-1]}
+        if(hazard_baseline_01 == "Splines"){
+          Z_01 <- Z_01[,-1]
+          B_T_01 <- splineDesign(knots_01, data.id.Case2$Time_T, ord = 4L)
+          Bs_T_01 <- splineDesign(knots_01, c(t(st_T)), ord = 4L)
+          if(left_trunc){
+            Bs_T0_01 <- splineDesign(knots_01, c(t(st_T0)), ord = 4L)
+          }
+        }
+        if(hazard_baseline_02 == "Splines"){
+          Z_02 <- Z_02[,-1]
+          B_T_02 <- splineDesign(knots_02, data.id.Case2$Time_T, ord = 4L)
+          Bs_T_02 <- splineDesign(knots_02, c(t(st_T)), ord = 4L)
+          if(left_trunc){
+            Bs_T0_02 <- splineDesign(knots_02, c(t(st_T0)), ord = 4L)
+          }
+        }
+
+        Case2 <- list( "delta2" = data.id.Case2$delta2, "Z_01" = Z_01, "Z_02" = Z_02, "Z_12" = Z_12, "Time_T" = data.id.Case2$Time_T,
+                       "st_T" = st_T, "X_GK_T" = X_GK_T, "U_GK_T" = U_GK_T, "Xslope_GK_T" = Xslope_GK_T, "Uslope_GK_T" = Uslope_GK_T,
+                       "X_T" = X_T, "U_T" = U_T, "Xslope_T" = Xslope_T, "Uslope_T" = Uslope_T, "X_base" = X_base, "U_base" = U_base,
+                       "y.new" = y.new, "ID.visit" = ID.visit, "offset" = offset, "B_T_01" = B_T_01, "B_T_02" = B_T_02,
+                       "Bs_T_01" = Bs_T_01, "Bs_T_02" = Bs_T_02, "Time_T0" = data.id.Case2$Time_T0,
+                       "st_T0" = st_T0, "X_GK_T0" = X_GK_T0, "U_GK_T0" = U_GK_T0, "Xslope_GK_T0" = Xslope_GK_T0, "Uslope_GK_T0" = Uslope_GK_T0,
+                       "Bs_T0_01" = Bs_T0_01, "Bs_T0_02" = Bs_T0_02
+        )
+
+      }
+
+      nb.beta <-  ncol(X_base)
+      nb.alpha <- c(ncol(Z_01), ncol(Z_02), ncol(Z_12))
+      nb.e.a <- ncol(U_base)
+
+      estimation.step1.noCI <- marqLevAlg(binit_noCI, fn = log_llh_2var_IC_rcpp, minimize = FALSE,
+
+                                     hazard_baseline_01 = hazard_baseline_01, sharedtype_01 = sharedtype_01,
+                                     hazard_baseline_02 = hazard_baseline_02, sharedtype_02 = sharedtype_02,
+                                     hazard_baseline_12 = hazard_baseline_12, sharedtype_12 = sharedtype_12,
+                                     ord.splines = nb.knots.splines + 2, nb.beta = nb.beta, Zq = Zq, nb_pointsGK = nb_pointsGK,
+                                     nb.e.a = nb.e.a, S = S1, wk = gaussKronrod()$wk, rep_wk = rep(gaussKronrod()$wk, length(gaussKronrod()$wk)), sk_GK = gaussKronrod()$sk, nb.alpha = nb.alpha,
+                                     variability_inter_visit = variability_inter_visit, variability_intra_visit = variability_intra_visit,
+                                     correlated_re = correlated_re, Case1 = NULL, Case1bis = Case1bis, Case2 = Case2, Case3 = NULL,
+                                     nbCase1 = nbCase1_noCI, nbCase1bis = nbCase1bis_noCI, nbCase2 = nbCase2_noCI, nbCase3 = nbCase3_noCI, left_trunc = left_trunc,
+                                     knots.hazard_baseline.splines_01 = knots_01,
+                                     knots.hazard_baseline.splines_02 = knots_02,
+                                     knots.hazard_baseline.splines_12 = knots_12,
+                                     index_beta_slope = index_beta_slope,
+                                     control = control,
+                                     nproc = nproc, clustertype = clustertype, maxiter = maxiter, print.info = print.info,
+                                     file = file, blinding = FALSE, epsa = epsa, epsb = epsb, epsd = 1.9, partialH = partialH)
+
+
+
+
+    }
+  }
+
+
+  #### Estimation finale
   ### On sépare par sous-groupes
   message("Case1")
   Case1 <- NULL
@@ -764,230 +1199,16 @@ DoubleVar_IDM <- function(formFixed, formRandom, formGroup, formGroupVisit, form
   message(paste(length(id.Case3),"indiduals",sep=" "))
 
   if(is.null(binit)){
-    binit <- c()
-    names_param <- c()
-
-    #01
-    if(hazard_baseline_01 == "Weibull"){
-      binit <- c(binit, shape_01)
-      names_param <- c(names_param, "Shape 01")
+    if((nbCase1 + nbCase3)/(nbCase1 + nbCase1bis + nbCase2 + nbCase3) > 0.10){
+      binit <- estimation.step1.noCI$b
     }
     else{
-      if(hazard_baseline_01 == "Gompertz"){
-        binit <- c(binit, gompertz.1_01, gompertz.2_01)
-        names_param <- c(names_param, "Gompertz 1 01", "Gompertz 2 01")
-      }
-      else{
-        if(hazard_baseline_01 == "Splines"){
-          binit <- c(binit,opt_splines_01$par)
-          for(i in 1:length(opt_splines_01$par)){
-            names_param <- c(names_param, paste("splines 01", i, sep = "_"))
-          }
-        }
-
-      }
-    }
-    binit <- c(binit, alpha_01)
-    if(!is.null(alpha_01)){
-      #print(head(Z))
-      names_param <- c(names_param, paste(colnames(Z_01),"01",sep = "_"))
-    }
-    if("current value" %in% sharedtype_01){
-      binit <- c(binit, 0)
-      names_param <- c(names_param, "Current Value 01")
-    }
-    if("slope" %in% sharedtype_01){
-      binit <- c(binit, 0)
-      names_param <- c(names_param, "Current Slope 01")
-    }
-    if("inter visit variability" %in% sharedtype_01){
-      binit <- c(binit,0)
-      names_param <- c(names_param, "inter visit variability 01")
-    }
-    if("intra visit variability" %in% sharedtype_01){
-      binit <- c(binit,0)
-      names_param <- c(names_param, "intra visit variability 01")
+      binit <- binit_noCI
     }
 
-    # 02
-    if(hazard_baseline_02 == "Weibull"){
-      binit <- c(binit, shape_02)
-      names_param <- c(names_param, "Shape 02")
-    }
-    else{
-      if(hazard_baseline_02 == "Gompertz"){
-        binit <- c(binit, gompertz.1_02, gompertz.2_02)
-        names_param <- c(names_param, "Gompertz 1 02", "Gompertz 2 02")
-      }
-      else{
-        if(hazard_baseline_02 == "Splines"){
-          binit <- c(binit,opt_splines_02$par)
-          for(i in 1:length(opt_splines_02$par)){
-            names_param <- c(names_param, paste("splines 02", i, sep = "_"))
-          }
-        }
-
-      }
-    }
-    binit <- c(binit, alpha_02)
-    if(!is.null(alpha_02)){
-      #print(head(Z))
-      names_param <- c(names_param, paste(colnames(Z_02),"02",sep = "_"))
-    }
-    if("current value" %in% sharedtype_02){
-      binit <- c(binit, 0)
-      names_param <- c(names_param, "Current Value 02")
-    }
-    if("slope" %in% sharedtype_02){
-      binit <- c(binit, 0)
-      names_param <- c(names_param, "Current Slope 02")
-    }
-    if("inter visit variability" %in% sharedtype_02){
-      binit <- c(binit,0)
-      names_param <- c(names_param, "inter visit variability 02")
-    }
-    if("intra visit variability" %in% sharedtype_02){
-      binit <- c(binit,0)
-      names_param <- c(names_param, "intra visit variability 02")
-    }
-
-    # 12
-    if(hazard_baseline_12 == "Weibull"){
-      binit <- c(binit, shape_12)
-      names_param <- c(names_param, "Shape 12")
-    }
-    else{
-      if(hazard_baseline_12 == "Gompertz"){
-        binit <- c(binit, gompertz.1_12, gompertz.2_12)
-        names_param <- c(names_param, "Gompertz 1 12", "Gompertz 2 12")
-      }
-      else{
-        if(hazard_baseline_12 == "Splines"){
-          binit <- c(binit,opt_splines_12$par)
-          for(i in 1:length(opt_splines_12$par)){
-            names_param <- c(names_param, paste("splines 12", i, sep = "_"))
-          }
-        }
-
-      }
-    }
-    binit <- c(binit, alpha_12)
-    if(!is.null(alpha_12)){
-      #print(head(Z))
-      names_param <- c(names_param, paste(colnames(Z_12),"12",sep = "_"))
-    }
-    if("current value" %in% sharedtype_12){
-      binit <- c(binit, 0)
-      names_param <- c(names_param, "Current Value 12")
-    }
-    if("slope" %in% sharedtype_12){
-      binit <- c(binit, 0)
-      names_param <- c(names_param, "Current Slope 12")
-    }
-    if("inter visit variability" %in% sharedtype_12){
-      binit <- c(binit,0)
-      names_param <- c(names_param, "inter visit variability 12")
-    }
-    if("intra visit variability" %in% sharedtype_12){
-      binit <- c(binit,0)
-      names_param <- c(names_param, "intra visit variability 12")
-    }
-
-    # Marker
-    binit <- c(binit, priorMean.beta)
-    names_param <- c(names_param, paste(colnames(X_base),"Y",sep = "_"))
-    if(variability_inter_visit){
-      binit <- c(binit,mu.log.sigma)
-      names_param <- c(names_param, "mu.sigma")
-    }
-    else{
-      binit <- c(binit, sigma_epsilon)
-      names_param <- c(names_param, "std_Y_inter")
-    }
-    if(variability_intra_visit){
-      binit <- c(binit,0.5)
-      names_param <- c(names_param, "mu.epsilon")
-    }
-    else{
-      binit <- c(0.5)
-      names_param <- c(names_param, "std_Y_intra")
-    }
-
-
-    if(variability_inter_visit && variability_intra_visit){
-      if(correlated_re){
-        binit <- c(binit,cholesky_b,
-                   rep(0,nb.e.a*2),
-                   0.1,0,0.1)
-        for(bi in 1:length(c(cholesky_b,
-                             rep(0,nb.e.a*2),
-                             0.1,0,0.1))){
-          names_param <- c(names_param, paste("chol b ", bi, sep=""))
-        }
-      }
-      else{
-        binit <- c(binit,cholesky_b,
-                   0.1,0,0.1)
-        for(bi in 1:length(c(cholesky_b,
-                             0.1,0,0.1))){ ### AJOUTER la matrice pour les autres effets alaeatoire et faire si correle ou non !!
-          names_param <- c(names_param, paste("chol b ", bi, sep=""))
-        }
-      }
-    }
-    else{
-      if(variability_inter_visit){
-        if(correlated_re){
-          binit <- c(binit,cholesky_b,
-                     rep(0,nb.e.a),
-                     0.1)
-          for(bi in 1:length(c(cholesky_b,
-                               rep(0,nb.e.a),
-                               0.1))){
-            names_param <- c(names_param, paste("chol b ", bi, sep=""))
-          }
-        }
-        else{
-          binit <- c(binit,cholesky_b,
-                     0.1)
-          for(bi in 1:length(c(cholesky_b,
-                               0.1))){
-            names_param <- c(names_param, paste("chol b ", bi, sep=""))
-          }
-        }
-      }
-      else{
-        if(variability_intar_visit){
-          if(correlated_re){
-            binit <- c(binit,cholesky_b,
-                       rep(0,nb.e.a),
-                       0.1)
-            for(bi in 1:length(c(cholesky_b,
-                                 rep(0,nb.e.a),
-                                 0.1))){
-              names_param <- c(names_param, paste("chol b ", bi, sep=""))
-            }
-          }
-          else{
-            binit <- c(binit,cholesky_b,
-                       0.1)
-            for(bi in 1:length(c(cholesky_b,
-                                 0.1))){
-              names_param <- c(names_param, paste("chol b ", bi, sep=""))
-            }
-          }
-        }
-        else{
-          binit <- c(binit,cholesky_b)
-          for(bi in 1:length(c(cholesky_b))){ ### AJOUTER la matrice pour les autres effets alaeatoire et faire si correle ou non !!
-            names_param <- c(names_param, paste("chol b ", bi, sep=""))
-          }
-        }
-      }
-    }
   }
-
-  nb.beta <-  length(priorMean.beta)
-  nb.alpha <- c(length(alpha_01), length(alpha_02), length(alpha_12))
+  nb.beta <-  ncol(X_base)
+  nb.alpha <- nb.alpha <- c(ncol(Z_01), ncol(Z_02), ncol(Z_12))
   nb.e.a <- ncol(U_base)
   control <- list(formFixed = formFixed, formRandom = formRandom, formSlopeFixed = formSlopeFixed, formSLopeRandom = formSlopeRandom, timeVar = timeVar)
 
@@ -1010,9 +1231,26 @@ DoubleVar_IDM <- function(formFixed, formRandom, formGroup, formGroupVisit, form
 
   }
 
+  if(variability_inter_visit && variability_intra_visit){
+    Zq <- randtoolbox::sobol(S1,  nb.e.a+2, normal = TRUE, scrambling = 1)
+  }
+  else{
+    if(variability_inter_visit){
+      Zq <- randtoolbox::sobol(S1,  nb.e.a+1, normal = TRUE, scrambling = 1)
+    }
+    else{
+      if(variability_intra_visit){
+        Zq <- randtoolbox::sobol(S1,  nb.e.a+1, normal = TRUE, scrambling = 1)
+      }
+      else{
+        Zq <- randtoolbox::sobol(S1,  nb.e.a, normal = TRUE, scrambling = 1)
+      }
+    }
+
+  }
+
 
   estimation.step1 <- marqLevAlg(binit, fn = log_llh_2var_IC_rcpp, minimize = FALSE,
-
                                  hazard_baseline_01 = hazard_baseline_01, sharedtype_01 = sharedtype_01,
                                  hazard_baseline_02 = hazard_baseline_02, sharedtype_02 = sharedtype_02,
                                  hazard_baseline_12 = hazard_baseline_12, sharedtype_12 = sharedtype_12,
@@ -1026,7 +1264,6 @@ DoubleVar_IDM <- function(formFixed, formRandom, formGroup, formGroupVisit, form
                                  knots.hazard_baseline.splines_12 = knots_12,
                                  index_beta_slope = index_beta_slope,
                                  control = control,
-
                                  nproc = nproc, clustertype = clustertype, maxiter = maxiter, print.info = print.info,
                                  file = file, blinding = FALSE, epsa = epsa, epsb = epsb, epsd = epsd, partialH = partialH)
 
@@ -1070,7 +1307,50 @@ DoubleVar_IDM <- function(formFixed, formRandom, formGroup, formGroupVisit, form
                                  nproc = nproc, clustertype = clustertype, maxiter = maxiter, print.info = print.info,
                                  file = file, blinding = FALSE, epsa = 3, epsb = 3, epsd = 0.9999)
 
+  estimation.step3 <- NULL
+  if(!is.null(S3)){
+    message("Third estimation")
+    if(variability_inter_visit && variability_intra_visit){
+      Zq <- randtoolbox::sobol(S3,  nb.e.a+2, normal = TRUE, scrambling = 1)
+    }
+    else{
+      if(variability_inter_visit){
+        Zq <- randtoolbox::sobol(S3,  nb.e.a+1, normal = TRUE, scrambling = 1)
+      }
+      else{
+        if(variability_intra_visit){
+          Zq <- randtoolbox::sobol(S3,  nb.e.a+1, normal = TRUE, scrambling = 1)
+        }
+        else{
+          Zq <- randtoolbox::sobol(S3,  nb.e.a, normal = TRUE, scrambling = 1)
+        }
+      }
+
+    }
+    estimation.step3 <- marqLevAlg(estimation.step1$b, fn = log_llh_2var_IC_rcpp, minimize = FALSE,
+
+                                   hazard_baseline_01 = hazard_baseline_01, sharedtype_01 = sharedtype_01,
+                                   hazard_baseline_02 = hazard_baseline_02, sharedtype_02 = sharedtype_02,
+                                   hazard_baseline_12 = hazard_baseline_12, sharedtype_12 = sharedtype_12,
+                                   ord.splines = nb.knots.splines + 2, nb.beta = nb.beta, Zq = Zq,
+                                   nb.e.a = nb.e.a, S = S3, wk = gaussKronrod()$wk, rep_wk = rep(gaussKronrod()$wk, length(gaussKronrod()$wk)), sk_GK = gaussKronrod()$sk,nb_pointsGK = nb_pointsGK,
+                                   nb.alpha = nb.alpha,
+                                   variability_inter_visit = variability_inter_visit, variability_intra_visit = variability_intra_visit,
+                                   correlated_re = correlated_re, Case1 = Case1, Case1bis = Case1bis, Case2 = Case2, Case3 = Case3,
+                                   nbCase1 = nbCase1, nbCase1bis = nbCase1bis, nbCase2 = nbCase2, nbCase3 = nbCase3, left_trunc = left_trunc,
+                                   knots.hazard_baseline.splines_01 = knots_01,
+                                   knots.hazard_baseline.splines_02 = knots_02,
+                                   knots.hazard_baseline.splines_12 = knots_12,
+                                   index_beta_slope = index_beta_slope,
+                                   control = control,
+
+                                   nproc = nproc, clustertype = clustertype, maxiter = maxiter, print.info = print.info,
+                                   file = file, blinding = FALSE, epsa = 3, epsb = 3, epsd = 0.9999)
+  }
+
+
+
   ### Retour de la fonction
-  resultat <- list(step1 = estimation.step1, step2 = estimation.step2, control = list(data = data.long))
+  resultat <- list(step1 = estimation.step1, step2 = estimation.step2, step3 = estimation.step3, control = list(data = data.long, time.long = estimation.step1.Long$time, time.noCI = estimation.step1.noCI$time))
   resultat
 }

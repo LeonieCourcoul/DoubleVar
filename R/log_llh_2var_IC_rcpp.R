@@ -321,7 +321,6 @@ log_llh_2var_IC_rcpp <- function(param,hazard_baseline_01, sharedtype_01,
   alpha_z <- list(alpha_01, alpha_02, alpha_12)
   nb_points_integral <- c(S, nb_pointsGK)
   gamma_z0 <- list(gamma_01, gamma_02, gamma_12)
-
   ### Case 1
   if(nbCase1 != 0){
     delta2 <- Case1[["delta2"]]; Z_12 <- Case1[["Z_12"]]; Time_T <- Case1[["Time_T"]]; st_T <- Case1[["st_T"]]
