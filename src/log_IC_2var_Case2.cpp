@@ -164,7 +164,7 @@ double log_IC_2var_Case2(arma::vec sharedtype, List HB, arma::vec Gompertz, arma
   if(hazard_baseline_01 == "Weibull"){
     h_0_GK_01_T_i = shape_01*(pow(st_T_i,shape_01-1))%wk;
     if(left_trunc){
-      h_0_GK_01_T0_i = shape_01*(pow(st_T0_i,shape_01-1));
+      h_0_GK_01_T0_i = shape_01*(pow(st_T0_i,shape_01-1))%wk;
     }
   }
   if(hazard_baseline_01 == "Gompertz"){
@@ -214,7 +214,7 @@ double log_IC_2var_Case2(arma::vec sharedtype, List HB, arma::vec Gompertz, arma
     h_0_02_T_i = shape_02*(pow(Time_T_i,(shape_02-1)));
     h_0_GK_02_T_i = shape_02*(pow(st_T_i,shape_02-1))%wk;
     if(left_trunc){
-      h_0_GK_02_T0_i = shape_02*(pow(st_T0_i,shape_02-1));
+      h_0_GK_02_T0_i = shape_02*(pow(st_T0_i,shape_02-1))%wk;
     }
   }
   if(hazard_baseline_02 == "Gompertz"){
