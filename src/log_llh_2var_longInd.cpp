@@ -34,7 +34,7 @@ double log_llh_2var_longInd(int S, List sigma_inter_intra, arma::mat X_base_i, a
     int n_ij = y_i_id_visit.n_elem;
     CV_long = dot(beta,X_base_i_id_visit) + b_y*U_base_i_id_visit.t() ;
     if( n_ij == 1){
-      f_Y_b_sigma = f_Y_b_sigma + log(1.0 / (sqrt(2.0*M_PI)*sigma_long)) - 0.5*pow((y_i_id_visit-CV_long)/sigma_long,2);
+      f_Y_b_sigma = f_Y_b_sigma + log(1.0 / (sqrt(2.0*M_PI)*sigma_long)) - 0.5*pow((y_i_id_visit(0)-CV_long)/sigma_long,2);
     }
     else{
       if(n_ij == 2){
